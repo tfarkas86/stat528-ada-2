@@ -1,0 +1,572 @@
+---
+title: "ADA2: Class 18, Ch 11, Logistic Regression"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+  pdf_document:
+    df_print: kable
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+
+# [Galapagos Island Species Data](http://www.statsci.org/data/general/galapagos.html)
+
+The Galapagos Islands about 600 miles off the coast of Ecuador provide an
+excellent laboratory for studying the factors that influence the development
+and survival of different life species. They were the site of much of Charles
+Darwin's original research leading later to publication of his "Origin of
+Species". Descending from a few stranded ancestors and cut off from the rest of
+the world, the Galapagos animals offer much more obvious proofs of the fact of
+evolution than can be seen in the more intricate complexities of life in most
+environments. Darwin wrote:
+
+_The natural history of these islands is eminently curious, and well deserves
+attention. Most of the organic productions are aboriginal creations, found
+nowhere else; there is even a difference between the inhabitants of the
+different islands; yet all show a marked relationship with those of America,
+though separated from that continent by an open space of ocean, between 500 and
+600 miles in width. The archipelago is a little world in itself, or rather a
+satellite attached to America, whence it has derived a few stray colonists and
+has received the general character of its indigenous productions. Considering
+the small size of the islands, we feel the more astonished at the number of
+their aboriginal beings, and at their confined range. Seeing every height
+crowned with its crater, and the boundaries of most of the lava-streams still
+distinct, we are led to believe that within a period geologically recent the
+unbroken ocean was here spread out. Hence, both in space and time, we seem to
+be brought somewhere near to that great fact---that mystery of mysteries---the
+first appearance of new beings on earth._
+
+And from elsewhere in Darwin's diary:
+_I never dreamed that islands 50 or 60 miles apart, and most of them in sight of
+each other, formed of precisely the same rocks, placed under a quite similar
+climate, rising to a nearly equal height, would have been differently tenanted...
+It is the circumstance that several of the islands possess their own species
+of the tortoise, mocking-thrush, finches and numerous plants, these species
+having the same general habits, occupying analogous situations, and obviously
+filling the same place in the natural economy of the archipelago, that strikes
+me with wonder._
+
+M.P. Johnson and P.H. Raven, "Species number and endemism: The Galapagos
+Archipelago revisited", Science, 179, 893-895 (1973), have presented data
+giving the number of plant species and related variables for 29 different
+islands. __Counts are given for both the total number of species and the number
+of species that occur only in the Galapagos (the endemics).__
+Elevations for Baltra and Seymour obtained from web searches. Elevations for
+four other small islands obtained from large-scale maps.
+
+```
+Variable    Description
+Island      Name of Island
+Plants      Number of plant species
+PlantEnd    Number of endemic plant species
+Finches     Number of finch species
+FinchEnd    Number of endemic finch species
+FinchGenera Number of finch genera
+Area        Area (km^2)
+Elevation   Maximum elevation (m)
+Nearest     Distance from to nearest island (km)
+StCruz      Distance to Santa Cruz Island (km)
+Adjacent    Area of adjacent island (km^2)
+```
+
+
+__Goal:__
+To build a model to predict the proportion of endemic plants on an island based
+on the island characteristics.
+
+
+```{R}
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+dat_gal <-
+  read_csv(
+    "ADA2_CL_18_Galapagos.csv"
+  , skip = 27             # I was expecting to skip 28, not sure why it wants 27
+  ) %>%
+  mutate(
+    id = 1:n()
+  )
+```
+
+Compute the observed proportion and empirical logits of endemic plants on each island.
+
+```{R}
+# observed proportions
+dat_gal <-
+  dat_gal %>%
+  mutate(
+    p_hat     = PlantEnd / Plants
+    # emperical logits
+  , emp_logit = log((p_hat + 0.5/Plants) / (1 - p_hat + 0.5/Plants))
+  )
+```
+
+Artificially remove the responses for three islands to predict later.
+
+```{R}
+# list of islands to predict
+island_pred_list <-
+  c(
+    "Gardner2"
+  , "Santa.Fe"
+  , "Wolf"
+  )
+
+## capture the observed probabilities
+dat_gal_pred_true <-
+  dat_gal %>%
+  filter(
+    Island %in% island_pred_list
+  )
+
+# Set these islands with missing response variables
+#  (there must be a better way to NA selected rows, but I didn't find it)
+dat_gal <-
+  dat_gal %>%
+  mutate(
+    Plants    = ifelse(Island %in% island_pred_list, NA, Plants   )
+  , PlantEnd  = ifelse(Island %in% island_pred_list, NA, PlantEnd )
+  , p_hat     = ifelse(Island %in% island_pred_list, NA, p_hat    )
+  , emp_logit = ifelse(Island %in% island_pred_list, NA, emp_logit)
+  )
+```
+
+__Data modifications__
+
+```{R}
+## RETURN HERE TO SUBSET AND TRANSFORM THE DATA
+
+dat_gal <-
+  dat_gal %>%
+  mutate(
+  ) %>%
+  filter(
+    TRUE  # !(id %in% c( ... ))
+  )
+
+### SOLUTION
+```
+
+
+## __(2 p)__ Interpret plot of observed proportions against predictors
+
+
+```{R, fig.height = 3, fig.width = 8}
+# Create plots for proportion endemic for each variable
+dat_gal_long <-
+  dat_gal %>%
+  select(
+    Island, id, p_hat, emp_logit, Area, Elevation, Nearest, StCruz, Adjacent
+  ) %>%
+  pivot_longer(
+    cols = c(Area, Elevation, Nearest, StCruz, Adjacent)
+  , names_to  = "variable"
+  , values_to = "value"
+  )
+
+# Plot the data using ggplot
+library(ggplot2)
+p <- ggplot(dat_gal_long, aes(x = value, y = p_hat, label = id))
+p <- p + geom_hline(yintercept = c(0,1), alpha = 0.25)
+p <- p + geom_text(hjust = 0.5, vjust = -0.5, alpha = 0.25, colour = 2)
+p <- p + geom_point()
+p <- p + scale_y_continuous(limits = c(0, 1))
+p <- p + facet_wrap( ~ variable, scales = "free_x", nrow = 1)
+print(p)
+
+# Plot the data using ggplot
+library(ggplot2)
+p <- ggplot(dat_gal_long, aes(x = value, y = emp_logit, label = id))
+p <- p + geom_text(hjust = 0.5, vjust = -0.5, alpha = 0.25, colour = 2)
+p <- p + geom_point()
+p <- p + facet_wrap( ~ variable, scales = "free_x", nrow = 1)
+print(p)
+```
+
+
+__Comment__ on how the proportion of endemic plants depends on each variable (in terms of increase/decrease).
+
+Also, __interpret__ the plot regarding whether the empirical logits appear linear (or any trends).
+Note that the marginal empirical logit plots _do not_ have to be linear, but the model in 6-dimensional space should be roughly "linear".
+
+Indicate whether any observations are gross outliers and should be dropped, and
+whether variables are obvious candidates for transformation.
+Then, drop outliers, transform and update your comments, and repeat until satisfied.
+
+
+
+### Solution
+
+__Proportion plots: __
+
+[answer]
+
+
+
+
+
+
+
+
+__Empirical logit plots:__
+
+[answer]
+
+
+
+
+
+
+
+
+
+## __(0 p)__ Predictor scatterplot matrix
+
+For further information, the relationship between predictors is plotted.
+
+```{R, fig.height = 6, fig.width = 6}
+# relationships between predictors
+
+library(ggplot2)
+library(GGally)
+p <- ggpairs(dat_gal %>% select(Area, Elevation, Nearest, StCruz, Adjacent))
+print(p)
+```
+
+
+## __(1 p)__ Fit a logistic regression model, interpret deviance lack-of-fit
+
+Fit a logistic model relating the probability of endemic plants to the predictors.
+Decide which predictors to use.
+
+```{R}
+  ### SOLUTION
+  # Don't include both Area and Elevation, since highly correlated
+
+glm_g_aensj <-
+  glm(
+    cbind(PlantEnd, Plants - PlantEnd) ~ Area + Nearest + StCruz + Adjacent
+  , family = binomial
+  , data = dat_gal
+  )
+
+
+# Test residual deviance for lack-of-fit (if > 0.10, little-to-no lack-of-fit)
+dev_p_val_full <- 1 - pchisq(glm_g_aensj$deviance, glm_g_aensj$df.residual)
+dev_p_val_full
+
+
+## Stepwise selection
+# option: trace = 0 doesn't show each step of the automated selection
+glm_g_aensj_red_AIC <-
+  step(
+    glm_g_aensj
+    # use scope=formula() to consider adding two-way interactions
+  #, scope = formula(cbind(PlantEnd, Plants - PlantEnd) ~ (Area + Nearest + StCruz + Adjacent)^2)
+  , direction = "both"
+  , trace = 0
+  )
+
+# the anova object provides a summary of the selection steps in order
+glm_g_aensj_red_AIC$anova
+
+coef(glm_g_aensj_red_AIC)
+
+# Test residual deviance for lack-of-fit (if > 0.10, little-to-no lack-of-fit)
+dev_p_val_red <- 1 - pchisq(glm_g_aensj_red_AIC$deviance, glm_g_aensj_red_AIC$df.residual)
+dev_p_val_red
+```
+
+Look at the residual deviance lack-of-fit statistic for the __full model__.
+__Is there__ evidence of any gross deficiencies with the model?
+
+How about for the __reduced model__?
+
+
+__(Regardless of lack of fit result, continue with the assignment.
+This is a realistic example and not everything may work out nicely.)__
+
+### Solution
+
+[answer]
+
+Full:
+
+
+
+Reduced:
+
+
+
+
+## __(2 p)__ Interpret logistic regression coefficients
+
+Which variables appear to be a useful predictor of the probability of endemic plants?
+__Interpret__ the hypothesis test(s).
+
+```{R}
+summary(glm_g_aensj_red_AIC)
+```
+
+### Solution
+
+[answer]
+
+
+`XXX` is significant and it's negative coefficient of
+  `r signif(glm_g_aensj_red_AIC$coefficients[2], 3)` suggests that as `XXX`
+  increases, the proportion of endemic plants decreases.
+
+etc.
+
+
+
+
+
+
+## __(1 p)__ Write model equation
+
+__Provide__ an equation relating the fitted probability of endemic plants to
+the selected predictor variables on the probability scale.
+
+### Solution
+
+[answer]
+
+The logistic equation is
+$$
+\tilde{p}
+  =
+\frac{     \exp( XXX )}
+     { 1 + \exp( XXX ) }
+.
+$$
+
+## __(0 p)__ Plot the fitted probabilities as a function of the selected predictor variables.
+
+Note that if there are more than one predictor,
+  these plots may be jagged.
+That is because the predictions we're getting for each observation is
+  conditional on the _other_ variables in the model.
+This is __not__ an ideal way of plotting the data and model,
+  but it will give some sense of whether the predictions are close to the observed proportions.
+
+With multiple predictors, you should choose 1 to 5 levels of the second predictor
+  and then plot the curves for the first predictor.
+If you have more than two predictors, maybe just choosing the mean of the other predictors
+  is enough to tell the story of the relationship with the first predictor.
+
+```
+{R}
+# choose levels of the second predictor and use all values from the first
+# we only need to keep the variables that were retained in the model:
+  # Area and Adjacent
+
+# x = Area, group = Adjacent quantiles
+dat_gal_pred_Area <-
+  dat_gal %>% select(Area, p_hat) %>%
+  expand_grid(
+    Adjacent  = dat_gal$Adjacent %>% quantile(probs = c(0.05, 0.25, 0.50, 0.75, 0.95))
+  ) %>%
+  # these are just reminders for what to plot
+  mutate(
+    x_var = "Area"
+  , Group = "Adjacent"
+  )
+
+# x = Adjacent, group = Area quantiles
+dat_gal_pred_Adjacent <-
+  dat_gal %>% select(Adjacent, p_hat) %>%
+  expand_grid(
+    Area      = dat_gal$Area     %>% quantile(probs = c(0.05, 0.25, 0.50, 0.75, 0.95))
+  ) %>%
+  # these are just reminders for what to plot
+  mutate(
+    x_var = "Adjacent"
+  , Group = "Area"
+  )
+
+# bind both together
+dat_gal_pred_plot <-
+  bind_rows(
+    dat_gal_pred_Area
+  , dat_gal_pred_Adjacent
+  )
+
+
+# put the fitted values in the data.frame
+# predict() uses all the values in dataset, including appended values
+fit_logit_pred_plot <-
+  predict(
+    glm_g_aensj_red_AIC
+  , dat_gal_pred_plot
+  , type   = "link"
+  , se.fit = TRUE
+  ) %>%
+  as_tibble()
+
+# put the fitted values in the data.frame
+dat_gal_pred_plot <-
+  dat_gal_pred_plot %>%
+  mutate(
+    fit_logit    = fit_logit_pred_plot$fit
+  , fit_logit_se = fit_logit_pred_plot$se.fit
+  # added "fit_p" to make predictions at appended Load values
+  , fit_p        = exp(fit_logit) / (1 + exp(fit_logit))
+  # CI for p fitted values
+  , fit_p_lower  = exp(fit_logit - 1.96 * fit_logit_se) / (1 + exp(fit_logit - 1.96 * fit_logit_se))
+  , fit_p_upper  = exp(fit_logit + 1.96 * fit_logit_se) / (1 + exp(fit_logit + 1.96 * fit_logit_se))
+  )
+```
+
+
+### Solution
+
+Given to you.
+
+```
+{R, fig.height = 6, fig.width = 8}
+library(ggplot2)
+p1 <- ggplot(dat_gal_pred_plot %>% filter(x_var == "Area"), aes(x = Area, y = p_hat, colour = Adjacent, group = Adjacent))
+# predicted curve and point-wise 95% CI
+p1 <- p1 + geom_ribbon(data = dat_gal_pred_plot %>% filter(Adjacent == dat_gal$Adjacent %>% quantile(probs = c(0.50))), mapping = aes(x = Area, ymin = fit_p_lower, ymax = fit_p_upper), alpha = 0.1)
+p1 <- p1 + geom_line(aes(x = Area, y = fit_p), size = 1)
+# fitted values
+p1 <- p1 + geom_point(aes(y = fit_p), size = 1.5)
+# observed values
+p1 <- p1 + geom_point(size = 2, colour = "black", alpha = 0.1)
+p1 <- p1 + scale_y_continuous(limits = c(0,1))
+p1 <- p1 + ylab("Probability")
+p1 <- p1 + labs(caption = "Adjacent quantiles plotted: 0.05, 0.25, 0.50, 0.75, 0.95.\nGray band is confidence band around Adjacent median quantile line.")
+p1 <- p1 + theme(legend.position = "bottom") # "none"
+#p1 <- p1 + labs(title = "Observed and predicted probability of endemic")
+#print(p1)
+
+library(ggplot2)
+p2 <- ggplot(dat_gal_pred_plot %>% filter(x_var == "Adjacent"), aes(x = Adjacent, y = p_hat, colour = Area, group = Area))
+# predicted curve and point-wise 95% CI
+p2 <- p2 + geom_ribbon(data = dat_gal_pred_plot %>% filter(Area == dat_gal$Area %>% quantile(probs = c(0.50))), mapping = aes(x = Adjacent, ymin = fit_p_lower, ymax = fit_p_upper), alpha = 0.1)
+p2 <- p2 + geom_line(aes(x = Adjacent, y = fit_p), size = 1)
+# fitted values
+p2 <- p2 + geom_point(aes(y = fit_p), size = 1.5)
+# observed values
+p2 <- p2 + geom_point(size = 2, colour = "black", alpha = 0.1)
+p2 <- p2 + scale_y_continuous(limits = c(0,1))
+p2 <- p2 + ylab("Probability")
+p2 <- p2 + labs(caption = "Area quantiles plotted: 0.05, 0.25, 0.50, 0.75, 0.95.\nGray band is confidence band around Area median quantile line.")
+p2 <- p2 + theme(legend.position = "bottom") # "none"
+#p2 <- p2 + labs(title = "Observed and predicted probability of endemic")
+#print(p2)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2), nrow=1, top = "Observed and predicted probability of endemic")
+```
+
+
+
+## __(2 p)__ Interpret the prediction with 95% CI at the three islands we didn't use to build the model
+
+Compute the estimated probability of endemic for these islands:
+```{R}
+island_pred_list
+```
+__Provide and interpret__ the 95% CIs for this probability.
+Also, interpret the intervals with respect to the observed proportions.
+
+Below we augment the data set with the values to predict, so the
+`predict()` function does the calculations for us.
+Simply display relevant columns for the `Island`s in the `island_pred_list`.
+
+```{r}
+# put the fitted values in the data.frame
+# predict() uses all the values in dataset, including appended values
+fit_logit_pred <-
+  predict(
+    glm_g_aensj_red_AIC
+  , dat_gal %>% select(Area, Elevation, Nearest, StCruz, Adjacent)
+  , type   = "link"
+  , se.fit = TRUE
+  ) %>%
+  as_tibble()
+
+# put the fitted values in the data.frame
+dat_gal <-
+  dat_gal %>%
+  mutate(
+    fit_logit    = fit_logit_pred$fit
+  , fit_logit_se = fit_logit_pred$se.fit
+  # added "fit_p" to make predictions at appended Load values
+  , fit_p        = exp(fit_logit) / (1 + exp(fit_logit))
+  # CI for p fitted values
+  , fit_p_lower  = exp(fit_logit - 1.96 * fit_logit_se) / (1 + exp(fit_logit - 1.96 * fit_logit_se))
+  , fit_p_upper  = exp(fit_logit + 1.96 * fit_logit_se) / (1 + exp(fit_logit + 1.96 * fit_logit_se))
+  )
+```
+
+
+### Solution
+
+Here's the table of observed and predicted proportions of endemic plants with associated 95% CIs.
+
+```{R}
+dat_gal %>%
+  select(
+    Island, fit_p, fit_p_lower, fit_p_upper
+  ) %>%
+  right_join(
+    dat_gal_pred_true
+  , by = "Island"
+  ) %>%
+  select(
+    Island, p_hat, fit_p, fit_p_lower, fit_p_upper
+  ) %>%
+  filter(
+    Island %in% island_pred_list
+  )
+```
+
+[answer]
+
+
+## __(2 p)__ Caveats
+
+What limitations may exist in this analysis?
+Do you have reason to expect that model predictions may not be accurate?
+
+### Solution
+
+[answer]
+

@@ -1,0 +1,522 @@
+---
+title: "ADA2: Class 06, Ch 03 A Taste of Model Selection for Multiple Regression"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+# Prostate-specific antigen (PSA)
+
+<!---
+Problem from Aug 2011 Stat Qual exam
+  http://math.unm.edu/graduate/past-qualifying-exams-statistics
+Data from http://www.ncbi.nlm.nih.gov/pubmed/2468795
+  Prostate specific antigen in the diagnosis and treatment of adenocarcinoma of the prostate. II. Radical prostatectomy treated patients.
+  Stamey TA, Kabalin JN, McNeal JE, Johnstone IM, Freiha F, Redwine EA, Yang N.
+  J Urol. 1989 May; 141(5):1076-83.
+
+Some of the variable names may look unfamiliar to you.  Two resources are
+[Wikipedia.org](https://en.wikipedia.org/wiki/Prostate-specific_antigen) and
+this glossary of
+[variable definitions](http://www.pcf.org/site/c.leJRIROrEpH/b.5826815/k.65DA/Glossary_of_Key_Terms.htm).
+For example, a large tumor may invade surrounding tissue and penetrate the wall
+of the prostate (variable 7 and 8). Also, benign hyperplasia is associated with
+higher PSA levels, but is non-cancerous (variable 6).
+-->
+
+A university medical center urology group
+  ([Stamey, _et al._, 1989](http://www.ncbi.nlm.nih.gov/pubmed/2468795))
+was interested in the association between a prostate-specific antigen (PSA) and
+a number of prognostic clinical measurements in men with advanced prostate
+cancer. Data were collected on 97 men who were about to undergo radical
+prostectomies.
+We will look at a subset of this dataset for this assignment;
+later in the semester we'll be able to analyze the full complex dataset.
+
+column | Variable name | Description
+-|-|-
+1  | Identification number    | 1-97
+2* | PSA level                | Serum prostate-specific antigen level (ng/ml)
+3* | Cancer volume            | Estimate of prostate cancer volume (cc)
+4* | Weight                   | Prostate weight (gm)
+5* | Age                      | Age of patient (years)
+6  | Benign prostatic         | Amount of benign prostatic hyperplasia (cm2) hyperplasia
+7  | Seminal vesicle invasion | Presence or absence of seminal vesicle invasion: 1 if yes; 0 if no
+8  | Capsular penetration     | Degree of capsular penetration (cm)
+9  | Gleason score            | Pathologically determined grade of disease (6,7,8), higher indicates worse prognosis
+
+
+
+__Background:__
+Until recently, PSA was commonly recommended as a screening mechanism for
+detecting prostate cancer. To be an efficient screening tool it is important
+that we understand how PSA levels relate to factors that may determine
+prognosis and outcome. The PSA test measures the blood level of
+prostate-specific antigen, an enzyme produced by the prostate. PSA levels under
+4 ng/mL (nanograms per milliliter) are generally considered normal, while
+levels over 4 ng/mL are considered abnormal (although in men over 65 levels up
+to 6.5 ng/mL may be acceptable, depending upon each laboratorys reference
+ranges). PSA levels between 4 and 10 ng/mL indicate a risk of prostate cancer
+higher than normal, but the risk does not seem to rise within this six-point
+range. When the PSA level is above 10 ng/mL, the association with cancer
+becomes stronger. However, PSA is not a perfect test. Some men with prostate
+cancer do not have an elevated PSA, and most men with an elevated PSA do not
+have prostate cancer. PSA levels can change for many reasons other than cancer.
+Two common causes of high PSA levels are enlargement of the prostate (benign
+prostatic hypertrophy (BPH)) and infection in the prostate (prostatitis).
+
+# Rubric
+
+A goal here is to build a multiple regression model to predict PSA level
+`PSA` from the cancer volume `V`, Prostate weight `Wt`, and Age `Age`.
+A reasonable strategy would be to:
+
+1. Examine the relationship between the response and the potential predictors.
+2. Decide whether any of the variables should be transformed.
+3. Perform a backward elimination using the desired response and predictors.
+4. Given the selected model, examine the residuals and check for influential cases.
+5. Repeat the process, if necessary.
+6. Interpret the model and discuss any model limitations.
+
+
+## __(1 p)__ Looking at the data
+
+_Describe any patterns you see in the data.
+Are the ranges for each variable reasonable?
+Extreme/unusual observations?
+Strong nonlinear trends with the response suggesting a transformation?_
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+  dat_psa <- read_csv("~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_06_psa.csv")
+str(dat_psa)
+#dat_psa
+
+dat_psa <-
+  dat_psa %>%
+  # select variables we want to use for this assignment
+  select(
+    ID
+  , PSA
+  , cancer_volume
+  , prostate_weight
+  , patient_age
+  ) %>%
+  # simplify column names
+  rename(
+    PSA = PSA
+  , V   = cancer_volume
+  , Wt  = prostate_weight
+  , Age = patient_age
+  )
+
+str(dat_psa)
+summary(dat_psa)
+```
+
+```{R, fig.height = 6, fig.width = 6}
+library(ggplot2)
+library(GGally)
+#p <- ggpairs(dat_psa)
+# put scatterplots on top so y axis is vertical
+p <- ggpairs(dat_psa %>% select(PSA, V, Wt, Age)
+            #, upper = list(continuous = wrap("points", alpha = 0.2, size = 0.5))
+            , upper = list(continuous = "points")
+            , lower = list(continuous = "cor")
+            )
+print(p)
+```
+
+```{R}
+# correlation matrix and associated p-values testing "H0: rho == 0"
+#library(Hmisc)
+dat_psa %>%
+  select(PSA, V, Wt, Age) %>%
+  as.matrix() %>%
+  Hmisc::rcorr()
+```
+
+Bivariate scatterplots with points labeled by ID number to help
+  characterize relationships and identify outliers.
+
+```{R, fig.height = 4, fig.width = 10, echo=FALSE}
+# ggplot: Plot the data with linear regression fit and confidence bands
+library(ggplot2)
+p1 <- ggplot(dat_psa, aes(x = V, y = PSA, label = ID))
+p1 <- p1 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p1 <- p1 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p1 <- p1 + geom_smooth(method = lm)
+p1 <- p1 + labs(title="Selling PSA by Volume")
+#print(p1)
+
+library(ggplot2)
+p2 <- ggplot(dat_psa, aes(x = Wt, y = PSA, label = ID))
+p2 <- p2 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p2 <- p2 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p2 <- p2 + geom_smooth(method = lm)
+p2 <- p2 + labs(title="Selling PSA by Weight")
+
+library(ggplot2)
+p3 <- ggplot(dat_psa, aes(x = Age, y = PSA, label = ID))
+p3 <- p3 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p3 <- p3 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p3 <- p3 + geom_smooth(method = lm)
+p3 <- p3 + labs(title="Selling PSA by Age")
+#print(p3)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2, p3), nrow=1)
+```
+
+
+### Solution
+
+1. The ranges look reasonable, but I'm not a SME. 
+2. Observation 32 has an extreme prostate weight value. I remove it below and rerun these exploratory analyses before answering #3. 
+
+```{R, fig.height = 6, fig.width = 6}
+library(ggplot2)
+library(GGally)
+
+# remove #32
+dat_psa <- dat_psa %>% filter(ID != "32")
+#p <- ggpairs(dat_psa)
+# put scatterplots on top so y axis is vertical
+p <- ggpairs(dat_psa %>% select(PSA, V, Wt, Age)
+            #, upper = list(continuous = wrap("points", alpha = 0.2, size = 0.5))
+            , upper = list(continuous = "points")
+            , lower = list(continuous = "cor")
+            )
+print(p)
+```
+
+```{R}
+# correlation matrix and associated p-values testing "H0: rho == 0"
+#library(Hmisc)
+dat_psa %>%
+  select(PSA, V, Wt, Age) %>%
+  as.matrix() %>%
+  Hmisc::rcorr()
+```
+
+Bivariate scatterplots with points labeled by ID number to help
+  characterize relationships and identify outliers.
+
+```{R, fig.height = 4, fig.width = 10, echo=FALSE}
+# ggplot: Plot the data with linear regression fit and confidence bands
+library(ggplot2)
+p1 <- ggplot(dat_psa, aes(x = V, y = PSA, label = ID))
+p1 <- p1 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p1 <- p1 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p1 <- p1 + geom_smooth(method = loess)
+p1 <- p1 + geom_smooth(method = lm, color = "red", lty = 2)
+p1 <- p1 + labs(title="Selling PSA by Volume")
+#print(p1)
+
+library(ggplot2)
+p2 <- ggplot(dat_psa, aes(x = Wt, y = PSA, label = ID))
+p2 <- p2 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p2 <- p2 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p2 <- p2 + geom_smooth(method = loess)
+p2 <- p2 + geom_smooth(method = lm, color = "red", lty = 2)
+p2 <- p2 + labs(title="Selling PSA by Weight")
+
+library(ggplot2)
+p3 <- ggplot(dat_psa, aes(x = Age, y = PSA, label = ID))
+p3 <- p3 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p3 <- p3 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p3 <- p3 + geom_smooth(method = loess)
+p3 <- p3 + geom_smooth(method = lm, color = "red", lty = 2)
+p3 <- p3 + labs(title="Selling PSA by Age")
+#print(p3)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2, p3), nrow=1)
+```
+
+
+### Solution: Post-Outlier Removal
+
+1. The ranges still look good.
+
+2. There are a few rather large values of PSA (observations 95-97) that may be exerting undue influence on the results. They're not yet obviouly outliers to me, so we'll leave them in for now. 
+
+3. I decided to add a LOESS smoother to evaluate the shape of relationships. The relationship between PSA and cancer volume most conforms to the linear fit. The other two relationships show complex patterns, but would be a challenge to model with a transformation, so we'll stick with linear for now. 
+
+## __(2 p)__ Backward selection, diagnostics of reduced model
+
+Fit an appropriate full model and perform backward selection using __BIC__.
+Discuss the diagnostics in terms of influential observations or problematic structure in the residuals.
+
+### Solution
+
+Below I'll get you started with the linear model with all the selected main effects
+  and a set of diagnostic plots.
+```{R}
+# fit full model
+lm_psa_full <-
+  lm(
+    PSA ~ V + Wt + Age
+  , data = dat_psa
+  )
+
+#library(car)
+#Anova(aov(lm_psa_full), type=3)
+summary(lm_psa_full)
+```
+
+```{R, fig.height = 3, fig.width = 10, echo=FALSE}
+# plot diagnostics
+e_plot_lm_diagostics(lm_psa_full, sw_plot_set = "simpleAV")
+```
+
+Yeesh, no those three values are definitely exerting extreme influence. Let's remove them and start over.
+
+```{R, fig.height = 6, fig.width = 6}
+library(ggplot2)
+library(GGally)
+
+# remove #32
+dat_psa <- dat_psa %>% filter(!ID %in% c(95, 96, 97))
+#p <- ggpairs(dat_psa)
+# put scatterplots on top so y axis is vertical
+p <- ggpairs(dat_psa %>% select(PSA, V, Wt, Age)
+            #, upper = list(continuous = wrap("points", alpha = 0.2, size = 0.5))
+            , upper = list(continuous = "points")
+            , lower = list(continuous = "cor")
+            )
+print(p)
+```
+
+```{R}
+# correlation matrix and associated p-values testing "H0: rho == 0"
+#library(Hmisc)
+dat_psa %>%
+  select(PSA, V, Wt, Age) %>%
+  as.matrix() %>%
+  Hmisc::rcorr()
+```
+
+Bivariate scatterplots with points labeled by ID number to help
+  characterize relationships and identify outliers.
+
+```{R, fig.height = 4, fig.width = 10, echo=FALSE}
+# ggplot: Plot the data with linear regression fit and confidence bands
+library(ggplot2)
+p1 <- ggplot(dat_psa, aes(x = V, y = PSA, label = ID))
+p1 <- p1 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p1 <- p1 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p1 <- p1 + geom_smooth(method = loess)
+p1 <- p1 + geom_smooth(method = lm, color = "red", lty = 2)
+p1 <- p1 + labs(title="Selling PSA by Volume")
+#print(p1)
+
+library(ggplot2)
+p2 <- ggplot(dat_psa, aes(x = Wt, y = PSA, label = ID))
+p2 <- p2 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p2 <- p2 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p2 <- p2 + geom_smooth(method = loess)
+p2 <- p2 + geom_smooth(method = lm, color = "red", lty = 2)
+p2 <- p2 + labs(title="Selling PSA by Weight")
+
+library(ggplot2)
+p3 <- ggplot(dat_psa, aes(x = Age, y = PSA, label = ID))
+p3 <- p3 + geom_point(alpha = 1/2, size=3)
+# plot labels next to points
+p3 <- p3 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p3 <- p3 + geom_smooth(method = loess)
+p3 <- p3 + geom_smooth(method = lm, color = "red", lty = 2)
+p3 <- p3 + labs(title="Selling PSA by Age")
+#print(p3)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2, p3), nrow=1)
+```
+
+```{R}
+# fit full model
+lm_psa_full <-
+  lm(
+    PSA ~ V + Wt + Age
+  , data = dat_psa
+  )
+
+#library(car)
+#Anova(aov(lm_psa_full), type=3)
+summary(lm_psa_full)
+```
+
+```{R, fig.height = 3, fig.width = 10, echo=FALSE}
+# plot diagnostics
+e_plot_lm_diagostics(lm_psa_full, sw_plot_set = "simpleAV")
+```
+
+OK, that's better. I'm not totally happy with it, but I don't want to remove outliers forever and ever. 
+
+```{r}
+lm_psa_rm <- step(lm_psa_full, direction="backward", test="F", k = log(nrow(dat_psa)))
+summary(lm_psa_rm)
+e_plot_lm_diagostics(lm_psa_rm, sw_plot_set = "simpleAV")
+```
+
+These diagnostics show a strong need for a better model. The assumption of normality is severely violated, there are at least a couple extreme outliers (affecting normality), the error variance increases with the fitted values, this pattern appears to be due to variance in cancer volume, and the Box-Cox profile shows a log transformation would be better. Let's do it.  
+
+## __(3 p)__ Address model fit
+
+If the model doesn't fit well (diagnostics tell you this, not $R^2$ or significance tests),
+  then address the lack of model fit.
+Transformations and removing influential points are two strategies.
+The decisions you make should be based on what you observed in the residual plots.
+If there's an influential observation, remove it and see how that affects
+  the backward selection (whether the same predictors are retained),
+  the model fit (diagnostics),
+  and regression coefficient estimates (betas).
+If there's a pattern in the residuals that can be addressed by a transformation,
+  guess at the appropriate transformation and try it.
+
+Repeat until you are satisfied with the diagnostics meeting the model assumptions.
+Below, briefly outline what you did (no need to show all the output)
+  by (1) identifying what you observed in the diagostics
+  and (2) the strategy you took to address that issue.
+Finally, show the final model and the diagnostics for that.
+Describe how the final model is different from the original;
+  in particular discuss whether variables retained are different from backward selection
+  and whether the sign and magnitude of the regression coefficients are much different.
+
+
+```
+# In the diagnostic plots, R uses the row label as the "Obs. number"
+# Thus, you need to remove observations by their ID number.
+#   (An ID doesn't change when a lower row is removed, but the Obs. number will.)
+# Below is an example of how to do that.
+
+# remove influential observations
+dat_psa_sub <-
+  dat_psa %>%
+  filter(
+    !(ID %in% c( [ID numbers here] )
+  )
+```
+
+### Solution
+
+```{r}
+dat_psa_new <- dat_psa %>%
+  mutate(across(PSA, ~log(.x)), 
+         across(c(V, Wt), ~sqrt(.x))) %>%
+  slice(-93)
+
+lm_psa_full <- lm(PSA ~ V + Wt + Age, data = dat_psa_new)
+lm_psa_rm <- step(lm_psa_full, direction="backward", test="F", k = log(nrow(dat_psa_new)))
+e_plot_lm_diagostics(lm_psa_rm, sw_plot_set = "simpleAV")
+```
+
+The Box-Cox profile showed a log transformation of PSA to be appropriate, and that observation 93 (not ID 93!) was an outlier. I removed #93 and performed a log tranformation. The resulting plots showed attenuating error variance across fitted values, and the AV plots showed a similar non-linearity, suggesting a square-root transformation might be appropriate, which I applied. I'm mostly happy with the result. The normality of error terms is the best we've seen yet, the couple outliers flagged by Cook's distance aren't that extreme, and the residuals appear to have stabilized. The AV plots are showing more linear relationships with PSA, though their not perfect. I'm going leave things here though, given the improvement in the other diagnostics. 
+
+## __(0 p)__ 3D plot
+
+You may want to use the 3D visualization for your original final model and
+after making some decisions based on diagnostics.
+Are you convinced it's a reasonable summary of the general relationship?
+
+```{R}
+## visualize in 3D with surface
+# library(rgl)
+# library(car)
+# scatter3d(y ~ x1 + x2, data = dat)
+```
+
+
+## __(1 p)__ Predictive ability of the final model
+
+What proportion of variation in the response does the model explain over the mean of the response?
+(This quantity indicates how precisely this model will predict new observations.)
+
+### Solution
+
+```{r}
+summary(lm_psa_rm)
+```
+
+The $R^2$ is 0.5195, indicating that about 52% of variance in PSA is explained by the combined effects of cancer volume and prostate weight.
+
+## __(2 p)__ Interpret the final model
+
+Write the equation for the final model and interpret each model coefficient.
+
+### Solution
+
+The equation for this final model is 
+
+$$
+\log{Y} = -0.20 + 0.51 * \sqrt{Vol} + 0.22 * \sqrt{Wt}
+$$
+indicating significant positive relationships between cancer volume and PSA, controlling for prostate weight, and prostate weight and PSA, controlling for cancer volume. A one unit increase in the square root of volume leads to a 0.51 unit increase in the natural log of PSA, and a one unit increase in the square root of prostate weight leads to a .22 unit increase in the natural log of PSA. The intercept indicates that the natural log of PSA is -.20 when both cancer volume and prostate weight are 0, a non-sensical concept, since prostate weight must be non-zero. 
+
+## __(1 p)__ Inference to whom
+
+To which population of people does this model make inference to?
+Go back to the abstract of the original study (first sentence) to see which
+population this sample of men was drawn from.
+
+
+### Solution
+
+This only applies to men who have already been diagnosed with advanced prostate cancer, limiting the ability of this study to help identify cancer in undiagnosed men. 
+

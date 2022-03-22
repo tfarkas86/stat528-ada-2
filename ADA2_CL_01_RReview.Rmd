@@ -1,0 +1,298 @@
+---
+title: "ADA2: Class 01, R, Review"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+#knitr::opts_chunk$set(cache = TRUE, autodep=TRUE)
+```
+
+
+Write R code to answer the quiz questions on Learn using the dataset below.
+
+# Rubric for grading
+
+For these questions below:
+
+* 3.  (2 p) plot and interpretation.
+* 5.  (2 p) plot and interpretation.
+* 7.  (2 p) plot and interpretation.
+* 10. (4 p) code and output appear correct, no errors.
+
+
+Note that because the __Quiz 1 questions__ also use this data, those questions are also in this document typeset in preformatted text, like this:
+
+```
+  Quiz 1. What was the lowest recorded punting distance among the 13 participants?
+```
+---
+
+# American Football Punters
+
+## [Description](http://www.statsci.org/data/general/punting.html)
+
+Investigators studied physical characteristics and ability in 13 football
+punters. Each volunteer punted a football ten times. The investigators recorded
+the average distance for the ten punts, in feet. They also recorded the average
+hang time (time the ball is in the air before the receiver catches it) for the
+ten punts, in seconds. In addition, the investigators recorded five measures of
+strength and flexibility for each punter: right leg strength (pounds), left leg
+strength (pounds), right hamstring muscle flexibility (degrees), left hamstring
+muscle flexibility (degrees), and overall leg strength (foot-pounds). From the
+study "The relationship between selected physical performance variables and
+football punting ability" by the Department of Health, Physical Education and
+Recreation at the Virginia Polytechnic Institute and State University, 1983.
+
+```
+Variable        Description
+-------------   --------------------------------
+Distance        Distance travelled in feet
+Hang            Time in air in seconds
+R_Strength      Right leg strength in pounds
+L_Strength      Left leg strength in pounds
+R_Flexibility   Right leg flexibility in degrees
+L_Flexibility   Left leg flexibility in degrees
+O_Strength      Overall leg strength in pounds
+```
+
+Data File: `ADA2_CL_01_punting.csv`
+
+## Source
+
+The Relationship Between Selected Physical Performance Variables and Football
+Punting Ability. Department of Health, Physical Education and Recreation,
+Virginia Polytechnic Institute and State University, 1983.
+
+
+---
+
+# Rubric
+
+1. Read the data set into R.
+
+```{R}
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+dat_punt <- readr::read_csv("ADA2_CL_01_punting.csv", skip = 1)
+str(dat_punt)
+#dat_punt
+```
+
+2. Generate summaries `summary()` and frequency tables `table()` for each variable.
+Answer questions 1--7.
+
+```{R}
+# I'll get you started with the code, the rest is up to you.
+summary(dat_punt)
+apply(dat_punt, 2, table)
+```
+
+Note that you can do even better than reading the numbers from above to answer the specific __quiz questions__.
+Instead, you can (not required) write code that returns the specific values you want.
+For example:
+
+* 1. The minimum distance is `r min(dat_punt$Distance)` ft.
+
+```
+  Quiz 1. What was the lowest recorded punting distance among the 13 participants?
+  Quiz 2. What was the highest recorded hang time among the 13 participants?
+  Quiz 3. Is the range of values for R_Strength the same or different than the range of values for L_Strength?
+  Quiz 4. What percentage of the sample has a L_Strength of 110 pounds?
+  Quiz 5. Is the range of values for R_Flexibility the same or different than the range of values for L_Flexibility?
+  Quiz 6. What percentage of the sample has a L_Flexibility of 106 degrees?
+  Quiz 7. What is the most common value for O_Strength (i.e., what is the modal value)?
+```
+
+Q1: Min of distance is `r min(dat_punt$Distance)`.  
+Q2: Max of hang time is `r max(dat_punt$Hang)`.  
+Q3: Range of right strength is `r range(dat_punt$R_Strength)`, and range of left strength is `r range(dat_punt$L_Strength)`.  
+
+```{r}
+pLS <- ecdf(dat_punt$L_Strength)
+pLS_110 <- pLS(110) - pLS(100)
+```
+Q4: Percentage of sample with L_Strength of 110 lbs is `r pLS_110`.  
+Q5: Range of right strength is `r range(dat_punt$R_Flexibility)`, and range of left strength is `r range(dat_punt$L_Flexibility)`.   
+
+```{r}
+pLF <- ecdf(dat_punt$L_Flexibility)
+pLF_106 <- pLF(106) - pLF(105)
+```
+Q6: Percentage of sample with L_Flexibility of 106lbs is `r pLF_106`.  
+
+```{r }
+OS_mode <- dat_punt %>%
+  group_by(O_Strength) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice(1) %>% 
+  pull(O_Strength)
+```
+
+Q7: The modal value for O_Strength is `r OS_mode`.   
+
+3. (2 p) Plot $y=$`Distance` and $x=$`Hang` and interpret the plot in terms of
+linearity and strength of correlation.
+
+```{R}
+# plot distance by hang
+library(ggplot2)
+p <- ggplot(dat_punt, aes(x = Hang , y = Distance)) + 
+  geom_point()
+# ...
+print(p)
+```
+
+The relationship appears to be both strong (high correlation) and rather linear.
+
+4. Calculate the Pearson correlation between `Distance` and `Hang`
+(read the help for performing the hypothesis test).
+Answer questions 8--9.
+
+```{r}
+dhcor <- cor(dat_punt$Distance, dat_punt$Hang)
+dhct <- cor.test(x = dat_punt$Distance, dat_punt$Hang)
+
+```
+
+```
+  Quiz 8. What is the correlation between Distance and Hang?
+  Quiz 9. The corresponding p-value for the correlation between Distance and Hang is ____.
+```
+Q8: The Pearson correlation between Distance and Hang is `r round(cor(dat_punt$Distance, dat_punt$Hang), 3)`.  
+Q9: The p-value for the correlation is `r dhct$p.value`.   
+
+5. (2 p) Create a new categorical (factor) variable, `O_StrengthFac`, from the quantitative
+variable overall leg strength (`O_Strength`) to indicate high leg strength:
+code less than 200 as 0 (low leg strength) and at least 200 as 1 (high leg strength).
+
+```{R}
+library(magrittr)
+# create categorical variable
+dat_punt %<>% 
+  mutate(O_StrengthFac = as.factor(ifelse(O_Strength < 200, 0, 1)))
+```
+
+
+Plot $y=$`Distance` and $x=$`O_StrengthFac` and interpret the comparison of
+distance by strength group.
+
+```{R}
+# plot distance by strength group
+library(ggplot2)
+ p <- ggplot(dat_punt, aes(y = Distance, x = O_StrengthFac)) + 
+   geom_boxplot(outlier.shape = NA) + 
+   geom_point(position=position_jitter(width = 0.1), alpha = 0.5) 
+print(p)
+```
+
+6. Use a two-sample $t$-test (assume equal variance) to test whether
+$H_0: \mu_{\textrm{low}} = \mu_{\textrm{high}}$, that the population means for distance are equal for the
+two overall leg strength groups you created.
+Answer questions 10--11.
+
+```{r}
+tt <- t.test(Distance ~ O_StrengthFac, data = dat_punt, var.equal = TRUE )
+tt
+```
+
+```
+  Quiz 10. Is distance significantly associated with overall strength (categorical) at an alpha = 0.05 level?
+  Quiz 11. What is the mean distance in feet for the low and high strength groups, respectively?
+```
+
+Q10: The p-value for association between strength and distance is `r tt$p.value`, so distance is not significant related at $\alpha = 0.05$.  
+Q11: The mean distance in feet for low strength is `r tt$estimate[1]`, and the mean for high strength is `r tt$estimate[2]`.  
+
+
+7. (2 p) Plot $y=$`Distance` and $x=$`R_Flexibility` and interpret the relationship.
+
+```{R}
+library(ggplot2)
+ p <- ggplot(dat_punt, aes(x = R_Flexibility , y = Distance )) +
+  geom_point()
+ print(p)
+```
+There appears to be a positive, more-or-less linear relationship between flexibility in the right leg and distance. We might investigate whether this relationship saturates, flattens out at high flexibilities. 
+
+8. Regress $y=$`Distance` on $x=$`R_Flexibility`.
+Answer questions 12--13.
+
+```{r}
+an1 <- lm(Distance ~ R_Flexibility, data = dat_punt)
+sum1 <- summary(an1)
+sum1
+
+```
+
+
+```
+  Quiz 12. What is the expected increase in distance for each degree increase in flexibility?
+  Quiz 13. Is distance significantly associated with flexibility at an alpha = 0.05 level?
+```
+
+Q12: The expected increase in distance is `r round(an1$coefficients[2], 3)` per degree increase in flexibility.  
+Q13: The p-value associated with flexibility is `r round(sum1$coefficients[2,4], 3)`, so there is a significant relationships at $\alpha = 0.05$.  
+
+9. Create a new variable which is the mean of the right leg and left leg
+flexibility variables, `O_Flexibility`. Generate a frequency distribution for
+this new variable.
+Answer questions 14--15.
+
+```{r}
+dat_punt %<>%
+  rowwise %>%
+  dplyr::mutate(O_Flexibility = mean(c(L_Flexibility, R_Flexibility)))
+```
+
+
+
+```
+  Quiz 14. What is the median value for your new variable that is the mean of the right and left leg flexibility?
+  Quiz 15. What percentage of the sample has a mean flexibility no more than 86 degrees?
+```
+
+Q14: The median for the new flexibility variable is `r median(dat_punt$O_Flexibility)`.  
+Q15: `r 100*round(ecdf(dat_punt$O_Flexibility)(86), 3)`% of the sample has a mean flexibility no more than 86 degrees. 
+
+10. (4 p) Upload your error-free program (html output as PDF file) showing your work and your
+plots for additional points.
+
+

@@ -1,0 +1,330 @@
+---
+title: "ADA2: Class 04, Ch 02 Introduction to Multiple Linear Regression"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+# Water Usage of Production Plant
+
+<!---
+Data from http://www.statsci.org/data/general/water.html
+Draper, N.R., and Smith, H. (1981).
+Applied Regression Analysis. Second Edition. Wiley, New York, page 352.
+-->
+
+A production plant cost-control engineer is responsible for cost reduction. One
+of the costly items in his plant is the amount of water used by the production
+facilities each month. He decided to investigate water usage by collecting
+seventeen observations on his plant's water usage and other variables.
+
+Variable    | Description
+----------- | ----------------------------------------------
+Temperature | Average monthly temperate (F)
+Production  | Amount of production (M pounds)
+Days        | Number of plant operating days in the month
+Persons     | Number of persons on the monthly plant payroll
+Water       | Monthly water usage (gallons)
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+dat_water <- read_csv("~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_04_water.csv")
+str(dat_water)
+#dat_water
+
+dat_water <-
+  dat_water %>%
+  mutate(
+    # Add an ID column
+    id = 1:n(), .before=1
+  ) %>%
+  # filter to remove observations (if needed)
+  #   TRUE        indicates that ALL observations are included
+  #   !(id %in% c(4, 12)) indicates to include all observations that are NOT id 4 or 12
+  filter(
+    TRUE  # !(id %in% c(4, 12))
+  )
+```
+
+__Note:__
+Because of the high correlation between `Production` and `Persons`,
+  do not include `Persons` in the model.
+
+# Rubric
+
+Following the in-class assignment this week,
+  perform a complete multiple regression analysis.
+
+1. (1 p) Scatterplot matrix and interpretation
+1. (2 p) Fit model, assess multiple regression assumptions
+1. (1 p) Interpret added variable plots
+1. (1 p) If there are model assumption issues, say how you address them at the beginning and start again.
+1. (1 p) State and interpret the multiple regression hypothesis tests
+1. (2 p) Interpret the significant multiple regression coefficients
+1. (1 p) Interpret the multiple regression $R^2$
+1. (1 p) One- or two-sentence summary
+
+
+# Solutions
+
+## __(1 p)__ Scatterplot matrix
+_In a scatterplot matrix below interpret the relationship between each pair of variables.
+If a transformation is suggested by the plot (that is, because there is a curved relationship),
+  also plot the data on the transformed scale and
+  perform the following analysis on the transformed scale.
+Otherwise indicate that no transformation is necessary._
+
+```{R}
+library(ggplot2)
+library(GGally)
+#p <- ggpairs(dat_water)
+p <- ggpairs(dat_water %>% select(-id, -Persons))  ## use select to remove vars
+print(p)
+```
+_A parallel coordinate plot is another way of seeing patterns of observations
+over a range of variables._
+```{R, fig.height = 4, fig.width = 10, echo=FALSE}
+# http://www.inside-r.org/packages/cran/GGally/docs/ggparcoord
+library(ggplot2)
+library(GGally)
+
+# univariate min/max scaling
+p_uniminmax <-
+  ggparcoord(
+    data = dat_water
+  , columns = c(5, 2, 4, 1, 3) #1:5
+  , groupColumn = 5 # color (pick the response)
+  #, order = "anyClass"
+  , scale = "uniminmax" # "uniminmax". "globalminmax"
+  , showPoints = FALSE
+  , title = "Parallel Coordinate Plot for the Water Data"
+  #, alphaLines = 1/3
+  #, shadeBox = "white"
+  #, boxplot = TRUE
+  ) + theme_bw()
+print(p_uniminmax)
+```
+
+### Solution
+
+There appears to be a straight-forward, positive correlation between production and water use, which makes good sense. There might be a positive relationship between temperature and water use, which also makes sense, but the relationship looks nonlinear, so below we transform with the square of temperature and reexamine the correlations. There's a hint of positive correlation between temperature and days, but that doesn't make much sense, and the relationship looks weak. No other correlations are apparent based on this pairwise plot. 
+
+```{r}
+p <- dat_water %>%
+  select(-c(id, Persons)) %>% #View
+  mutate(across(Temperature, ~ .x^2)) %>%
+  ggpairs()
+
+print(p)
+```
+
+Umm ... this square transformation didn't seem to address the non-linearity, or do very much at all. I also tried an exponential transformation, which was a total disaster. 
+
+## __(2 p)__ Multiple regression assumptions (assessing model fit)
+_Below the multiple regression is fit.
+Start by assessing the model assumptions by interpretting what you learn from the first seven plots (save the added variable plots for the next question)._
+_If assumptions are not met, attempt to address by transforming a variable (or removing an outlier) and
+restart at the beginning using the new transformed variable._
+
+```{R}
+# fit the simple linear regression model
+#lm_w_tpdp <- lm(Water ~ Temperature + Production + Days + Persons, data = dat_water)
+lm_w_tpd <-
+  lm(
+    Water ~ Temperature + Production + Days
+  , data = dat_water
+  )
+```
+
+Plot diagnostics.
+```{R, fig.height = 3, fig.width = 10, echo=FALSE}
+# plot diagnostics
+e_plot_lm_diagostics(lm_w_tpd, sw_plot_set = "simpleAV")
+```
+
+### Solution
+
+[answer]
+
+From the diagnostic plots above,
+
+  (1) The results actually look normal enough for me. 
+  (2) There is definitely one major outlier based on Cook's distance, 
+  (3) also visible here, though other points with high leverage don't influence the overall fit of the model.
+  (4) I think we're seeing here unstable variace, showing a bit of a fan. 
+  (5) Looks fine. 
+  (6) Also looks okay, I think, but this red line is all wonky.
+  (7) Fine. 
+  
+Let's try a tranformation following the BoxCox profile: 
+
+```{r}
+dat_water_t <- dat_water %>%
+  mutate(across(Water, ~.x^-1)) 
+
+lmt <-lm(Water ~ Temperature + Production + Days, data = dat_water_t) 
+  e_plot_lm_diagostics(lmt, sw_plot_set = "simpleAV")
+```
+
+OK, that seems to have helped! We don't really have much fanning of the residuals, and the outlier is now not so extreme. Just remember the effects will be switched, because we're working with the reciprocal of water use now.
+
+
+## __(1 p)__ Added variable plots
+
+_Use partial regression residual plots (added variable plots)
+  to check for the need for transformations.
+If linearity is not supported, address and restart at the beginning._
+
+
+### Solution
+
+The AV plots show a negative effect of temperature and production on the reciprocal of water use, and a positive effect of days. Not so sure about this effect of day ... doesn't make much sense to me. All effects are rather linear. 
+
+## __(1 p)__ Multiple regression hypothesis tests
+_State the hypothesis test and conclusion for each regression coefficient._
+
+```{R}
+# use summary() to get t-tests of parameters (slope, intercept)
+summary(lmt)
+```
+
+### Solution
+
+Ignoring the intercept: 
+
+The hypotheses for each coefficient are for whether the coefficient values are different from zero, conditional on all other predictors. In the case of the intercept, that's the value of water use when all other variables are at 0 (not interesting). For the other three, it's essentially whether there is an effect of the variable on water use. We see a significant negative effect of production on the reciprocal of water use, and marginal effects of temperature and days, in the negative and positive direction respectively. Marginal here defined as rejecting the null hypothesis at $\alpha = 0.10$, but failing to do so at $\alpha = 0.05$. 
+
+For $H_0: \beta_{\textrm{Temperature}}=0$, the $t$-statistic is
+`r signif(summary(lmt)$coefficients[2,3],4)`
+with an associated p-value of
+`r signif(summary(lmt)$coefficients[2,4],4)`.
+Thus, we fail to reject $H_0$ concluding that the slope is statistically significantly different from 0 conditional on the other variables in the model.
+
+Similarly,
+for $H_0: \beta_{\textrm{Production}}=0$, the $t$-statistic is `r signif(summary(lmt)$coefficients[3,3],4)`
+with an associated p-value of
+`r signif(summary(lmt)$coefficients[3,4],4)`.
+Thus, we reject $H_0$ concluding that the slope is statistically significantly different from 0 conditional on the other variables in the model.
+
+
+Similarly,
+for $H_0: \beta_{\textrm{Days}}=0$, the $t$-statistic is `r signif(summary(lmt)$coefficients[4,3],4)`
+with an associated p-value of
+`r signif(summary(lmt)$coefficients[4,4],4)`.
+Thus, we fail to reject $H_0$ concluding that the slope is statistically significantly different from 0 conditional on the other variables in the model.
+
+
+## __(1 p)__ Multiple regression interpret coefficients
+_Interpret the significant coefficients of the multiple regression model._
+
+
+### Solution
+
+If we only consider the effect of Production significant, the coefficient indicates that for every one unit increase in production, the reciprocal of water use increases by `r signif(summary(lmt)$coefficients[3,1],4)`.
+
+
+## __(1 p)__ Multiple regression $R^2$
+_Interpret the Multiple R-squared value._
+
+### Solution
+
+The multiple $R^2$ is `r signif(summary(lmt)$r.squared, 4)`, indicating about 60% of variation in the inverse of water use is explained by this model. 
+
+## __(1 p)__ Summary
+_Summarize your findings in one sentence._
+
+### Solution
+
+We have strong evidence that the amount of production increases water use, and some weaker evidence temperature increases water use, and that the number of days decreases water use. 
+
+# Unused plots
+
+```{R}
+## Aside: While I generally recommend against 3D plots for a variety of reasons,
+## so you can visualize the surface fit in 3D, here's a 3D version of the plot.
+## I will point out a feature in this plot that we would't see in other plots
+## and would typically only be detected by careful consideration
+## of a "more complicated" second-order model that includes curvature.
+
+# library(rgl)
+# library(car)
+# scatter3d(Water ~ Temperature + Production, data = dat_water)
+```
+
+These bivariate plots can help show the relationships between the response and
+  predictor variables and identify each observation.
+
+```{R, fig.height = 4, fig.width = 10, echo=FALSE}
+# ggplot: Plot the data with linear regression fit and confidence bands
+library(ggplot2)
+p1 <- ggplot(dat_water, aes(x = Temperature, y = Water, label = id))
+p1 <- p1 + geom_point(aes(colour = Production), size=3)
+# plot labels next to points
+p1 <- p1 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p1 <- p1 + geom_smooth(method = lm)
+p1 <- p1 + labs(title="Selling Water by Temperature with colored Production")
+#print(p1)
+
+library(ggplot2)
+p2 <- ggplot(dat_water, aes(x = Days, y = Water, label = id))
+p2 <- p2 + geom_point(aes(colour = Temperature), size=3)
+# plot labels next to points
+p2 <- p2 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p2 <- p2 + geom_smooth(method = lm)
+p2 <- p2 + labs(title="Selling Water by Days with colored Temperature")
+
+library(ggplot2)
+p3 <- ggplot(dat_water, aes(x = Production, y = Water, label = id))
+p3 <- p3 + geom_point(aes(colour = Days), size=3)
+# plot labels next to points
+p3 <- p3 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/2)
+# plot regression line and confidence band
+p3 <- p3 + geom_smooth(method = lm)
+p3 <- p3 + labs(title="Selling Water by Production with colored Days")
+#print(p3)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2, p3), nrow=1)
+```
+

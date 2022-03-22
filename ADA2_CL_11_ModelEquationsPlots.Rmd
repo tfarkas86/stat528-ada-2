@@ -1,0 +1,279 @@
+---
+title: "ADA2: Class 11, Chs 05 and 07, writing and plotting model equations"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+  pdf_document:
+    df_print: kable
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+#knitr::opts_chunk$set(cache = TRUE, autodep=TRUE)  #$
+```
+
+**This assignment is to be printed and hand-written.**
+
+In my opinion, some of the most important skills in modeling are:
+
+* writing down a model using indicator variables,
+* interpretting model coefficients,
+* solving for the predicted value for any combination of predictors, and
+* plotting the fitted model.
+
+This assignment applies these skills to two-way factor models (ADA2 Chapter 5)
+  and ANCOVA models with one factor and one continuous predictor (ADA2 Chapter 7).
+
+
+# 1. Two-way main-effect model: Kangaroo crest width
+
+Recall these data, results, and the model from Week 05.
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+kang <-
+  read_csv(
+    "~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_09_kang.csv"
+  , na = c("", ".")
+  ) %>%
+  # subset only our columns of interest
+  select(
+    sex, species, cw
+  ) %>%
+  # make dose a factor variable and label the levels
+  mutate(
+    sex     = factor(sex    , labels = c("M","F"))
+  , species = factor(species, labels = c("Mg", "Mfm", "Mff"))
+  )
+
+str(kang)
+```
+
+```{R, fig.height = 5, fig.width = 8, echo = FALSE}
+# Calculate the cell means for each (sex, species) combination
+# Group means
+kang_mean_xs  <- kang %>% group_by(sex, species) %>% summarise(m = mean(cw)) %>% ungroup()
+kang_mean_xs
+
+# Interaction plots, ggplot
+library(ggplot2)
+p1 <- ggplot(kang, aes(x = sex, y = cw, colour = species))
+p1 <- p1 + geom_hline(aes(yintercept = 0), colour = "black"
+                  , linetype = "solid", size = 0.2, alpha = 0.3)
+p1 <- p1 + scale_y_continuous(limits = c(90, 170), breaks = seq(90, 170, by=10))
+p1 <- p1 + geom_boxplot(alpha = 0.5, outlier.size=0.1)
+p1 <- p1 + geom_point(data = kang_mean_xs, aes(y = m), size = 4)
+p1 <- p1 + geom_line(data = kang_mean_xs, aes(y = m, group = species), size = 1.5)
+p1 <- p1 + theme_bw()
+p1 <- p1 + labs(title = "Kangaroo interaction plot, species by sex")
+#print(p1)
+
+p2 <- ggplot(kang, aes(x = species, y = cw, colour = sex))
+p2 <- p2 + geom_hline(aes(yintercept = 0), colour = "black"
+                  , linetype = "solid", size = 0.2, alpha = 0.3)
+p2 <- p2 + scale_y_continuous(limits = c(90, 170), breaks = seq(90, 170, by=10))
+p2 <- p2 + geom_boxplot(alpha = 0.5, outlier.size=0.1)
+p2 <- p2 + geom_point(data = kang_mean_xs, aes(y = m), size = 4)
+p2 <- p2 + geom_line(data = kang_mean_xs, aes(y = m, group = sex), size = 1.5)
+p2 <- p2 + theme_bw()
+p2 <- p2 + labs(title = "Kangaroo interaction plot, sex by species")
+#print(p2)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2), nrow=1, top="Kangaroo crestwidth plots")
+```
+
+```{R}
+lm_cw_x_s <-
+  lm(
+    cw ~ sex + species
+  , data = kang
+  )
+# parameter estimate table
+summary(lm_cw_x_s)
+```
+
+## __(3 p)__ Write the fitted model equation.
+
+Use the parameter estimate table above to write out the fitted model equation.
+Use indicator function notation for categorical variables.
+First determine what each sex and species number is.
+The equation looks like: $\hat{y} = [\text{terms}]$.
+
+### Solution
+
+$$ 
+\widehat{cw} = 97.8 
++ 24.7 * I(\text{sex = F}) 
++ 5.0 * I(\text{sp. = Mfm}) 
++ 34.3 * I(\text{sp. = Mff})
+$$
+
+## __(2 p)__ Separate model equations.
+
+For each combination of species and sex, write the model.
+
+### Solution
+
+Sex | Species | Fitted Model
+-|-|-
+M | Mg   | $\hat{y}= 97.8$
+\ | |
+M | Mfm  | $\hat{y}= 97.8 + 5.0 = 102.8$
+\ | |
+M | Mff  | $\hat{y}= 97.8 + 34.3 = 132.1$
+\ | |
+F | Mg   | $\hat{y}= 97.8 + 24.7 = 122.5 $
+\ | |
+F | Mfm  | $\hat{y}= 97.8 + 24.7 + 5.0 = 127.5$
+\ | |
+F | Mff  | $\hat{y}= 97.8 + 24.7 + 34.3 = 156.8$
+
+## __(0 p)__ Plot the observed and fitted values.
+
+Use symbols/colors/labels to distinguish between the observed and predicted
+values and clearly identify the species/sex combinations.
+Use the minimum about of labeling to make it clear.
+
+### Solution
+
+COVID-19 Year, no hand plotting :(
+
+```{R, fig.height = 5, fig.width = 8, echo = FALSE}
+# Interaction plots, ggplot
+library(ggplot2)
+p2 <- ggplot(kang, aes(x = species, y = cw, colour = sex))
+p2 <- p2 + scale_y_continuous(limits = c(90, 170), breaks = seq(90, 170, by=10))
+#p2 <- p2 + geom_hline(aes(yintercept = 0), colour = "black"
+#                  , linetype = "solid", size = 0.2, alpha = 0.3)
+#p2 <- p2 + labs(title = "Kangaroo interaction plot, sex by species")
+#print(p2)
+p2 <- p2 + theme_bw()
+library(gridExtra)
+grid.arrange(grobs = list(p2, p2), nrow=1, top="Kangaroo crestwidth plots (an extra in case you need to redo it)")
+```
+
+
+
+# 2. ANCOVA model: Faculty political tolerances
+
+A political scientist developed a questionnaire to determine political
+tolerance scores for a random sample of faculty members at her university.
+She wanted to compare mean scores adjusted for the age for each of the
+three categories: full professors (coded 1), associate professors (coded 2),
+and assistant professors (coded 3). The data are given below. Note the higher
+the score, the more tolerant the individual.
+
+Below we will fit and interpret a model to assess the dependence of tolerance
+score on age and rank.
+(We will assess model fit in a later assignment.)
+
+```{R}
+tolerate <-
+  read_csv("~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_12_tolerate.csv") %>%
+  mutate(
+    rank = factor(rank)
+    # set "3" as baseline level
+  , rank = relevel(rank, "3")
+  )
+str(tolerate)
+```
+
+## __(3 p)__ Write the fitted model equation.
+
+Note in the code what the baseline rank is.
+```{R}
+lm_s_a_r_ar <-
+  lm(
+    score ~ age * rank
+  , data = tolerate
+  )
+summary(lm_s_a_r_ar)
+```
+
+Use the parameter estimate table above to write out the fitted model equation.
+Use indicator function notation for categorical variables.
+The equation looks like: $\hat{y} = [\text{terms}]$.
+
+### Solution
+
+$$
+\widehat{score} = 5.4 
+- 0.013 * Age
++ 2.785 * I(\text{rank = 1})
+- 1.223 * I(\text{rank = 2})
+- 0.072 * Age * I(\text{rank = 1})
++ 0.030 * Age * I(\text{rank = 2})
+$$
+
+## __(2 p)__ Separate model equations.
+
+There's a separate regression line for each faculty rank.
+
+### Solution
+
+Rank | | Fitted Model
+-|-|-
+1 | | $\hat{y}= 5.4 - 0.013 * Age + 2.785 - 0.072 * Age = 8.185  0.085 * Age$
+\ | |
+2 | | $\hat{y}= 5.4 - 0.013 * Age - 1.223   + 0.030 * Age = 4.177 + 0.017 * Age  $
+\ | |
+3 | | $\hat{y}= 5.4 - 0.013 * Age$
+
+## __(0 p)__ Plot the fitted regression lines.
+
+Use symbols/colors/labels to distinguish between the observed and predicted
+values and clearly identify the rank.
+Use the minimum about of labeling to make it clear.
+I recommend plotting each line by evaluating two points then connecting them,
+  for example, by evaluating at age=0 and age=50.
+
+### Solution
+
+COVID-19 Year, no hand plotting :(
+
+```{R, fig.height = 5, fig.width = 8, echo = FALSE}
+library(ggplot2)
+p <- ggplot(tolerate, aes(x = age, y = score, colour = rank, label = rank))
+p <- p + geom_text(size=4)
+p <- p + expand_limits(x = 0, y = 8.5)
+#p <- p + geom_smooth(method = lm, alpha=0.15, se = FALSE)
+p <- p + labs(title="Tolerance score data")
+p <- p + theme_bw()
+p <- p + theme(legend.position = "none")
+#print(p)
+library(gridExtra)
+grid.arrange(grobs = list(p, p), nrow=1, top="Faculty tolerance (an extra in case you need to redo it)")
+```
+
+

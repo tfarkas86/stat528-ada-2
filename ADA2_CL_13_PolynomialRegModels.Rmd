@@ -1,0 +1,204 @@
+---
+title: "ADA2: Class 13, Ch 08, polynomial regression"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 120)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+knitr::opts_chunk$set(cache = FALSE) #TRUE, autodep=TRUE)
+```
+
+# Hooker's Himalayian boiling point altitude data
+
+Dr. Joseph Hooker collected the following data in the 1840s on the boiling
+point of water and the atmospheric pressure at 31 locations in the Himalayas.
+Boiling point is measured in degrees Fahrenheit. The pressure is recorded in
+inches of mercury, adjusted for the difference between the ambient air
+temperature when he took the measurements and a standard temperature.
+
+The goal was to develop a model to predict the atmospheric pressure from the
+boiling point.
+
+**Historical note:** Hooker really wanted to estimate altitude above sea level from
+measurements of the boiling point of water. He knew that the altitude could be
+determined from the atmospheric pressure, measured with a barometer, with lower
+pressures corresponding to higher altitudes. His interest in the above
+modelling problem was motivated by the difficulty of transporting the fragile
+barometers of the 1840s. Measuring the boiling point would give travelers a
+quick way to estimate elevation, using the known relationship between elevation
+and barometric pressure, and the above model relating pressure to boiling
+point.
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+dat_boil <-
+  read_csv(
+    "~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_13_boilingpressure.csv"
+  , skip = 2
+  ) %>%
+  mutate(
+    boilingF_cen = boilingF - mean(boilingF)
+  )
+
+# x-variable mean for centering
+dat_boil$boilingF %>% mean()
+
+str(dat_boil)
+```
+
+## __(2 p)__ Plot the data.
+
+Using `ggplot`, try to implement these features in a plot.
+Overlay both a straight-line regression line in blue (`geom_smooth(method = lm, col = "blue", ...)`),
+as well as a loess smooth (default) dashed line in red (`geom_smooth(method = loess, col = "red", linetype = 2, ...)`).
+Using `alpha=1/5` will make the confidence bands more transparent.
+Also, if you plot the points last, they'll lie on top of the lines.
+
+Describe the key features of this plot.
+
+### Solution
+
+I'll give you this first plot to help get started, in particular to illustrate a nice use of the caption
+  and the annotation of a second x-axis for the centered version of the `boilingF` variable.
+
+```{R, fig.height = 5, fig.width = 5}
+library(ggplot2)
+p <- ggplot(dat_boil, aes(x = boilingF, y = pressure))
+p <- p + scale_x_continuous(sec.axis = sec_axis(~ . - mean(dat_boil$boilingF), name = "boilingF centered"))
+p <- p + geom_vline(xintercept = mean(dat_boil$boilingF), alpha = 1/4)
+p <- p + geom_smooth(method = lm, se = TRUE, col = "blue", fill = "blue", alpha = 1/5)
+p <- p + geom_smooth(method = loess, se = TRUE, col = "red", fill = "red", linetype = 2, alpha = 1/5)
+p <- p + geom_point(size = 2)
+p <- p + labs(title = "Simple linear model"
+            , caption = "Blue solid = line, Red dashed = loess smooth curve"
+              )
+print(p)
+```
+
+
+Well, these are very straight lines. However, you can see that the LOESS smoother demonstrates some quadratic behavior, where a linear fit underpredicts at the boundaries, and overpredicts toward the center. Maybe there's something to it. Let's see. 
+
+
+## __(3 p)__ Fit a simple linear regression, assess assumptions.
+
+Fit a simple linear regression model for predicting pressure from boiling
+point. Provide output for examining residuals, outliers, and influential cases.
+
+Looking at the plots, are there any indications that the mean pressure is not
+linearly related to boiling point? Are there any observations that appear to be
+highly influencing the fit of this model? Are there certain points or regions
+of the data where the model does not appear to fit well? Discuss.
+
+Which, if any, of the standard linear regression model assumptions appears to
+be violated in this analysis? If you believe that some of the assumptions are
+violated, does it appear that deleting one or two points would dramatically
+improve the fit? Would you use this model for predicting pressure from boiling
+point? Discuss and carry out any needed analysis to support your position.
+
+### Solution
+
+```{r}
+mod1 <- lm(pressure ~ boilingF, data = dat_boil)
+
+e_plot_lm_diagostics(mod1)
+```
+
+Oh yeah, those are some very alarming diagnostics. As I suggested above, the residuals are showing a U-shaped pattern across fitted values, which is clearly driven by the pattern across boiling temperature. The model is over-predicting toward the boundaries and under-predicting toward the center of boiling temperature. 
+
+There are also some severe outliers, but let's try to fix the fit first and see what happens. It could solve all our problems. 
+
+## __(1 p)__ Interpret $R^2$
+
+Interpret $R^2$ in the previous simple linear regression model.
+
+### Solution
+
+```{r}
+summary(mod1)
+```
+
+Great example. The $R^2$ shows the linear relationship between temperature and pressure explains over 99% of the variation in pressure. So although we have evidence that we can do better, this model would probably do rather well predicting pressure from boiling temperature.  
+
+## __(2 p)__ A better model.
+
+Decide whether transformation, or a polynomial model in boiling point, is
+needed to adequately summarize the relationship between pressure and boiling
+point. If so, perform a complete analysis of the data on this scale (that is,
+check for influential observations, outliers, non-normality, etc.).
+
+### Solution
+
+```{r}
+dat_boil <- dat_boil %>% slice(-2)
+mod2 <- lm(pressure ~ boilingF + I(boilingF^2), data = dat_boil)
+
+e_plot_lm_diagostics(mod2)
+
+summary(mod2)
+
+```
+
+I decided to fit a quadratic for temperature, and that solved a lot of our problems. There was a rather extreme value that may have been an outlier, so I've removed it, but the model didn't change much. We now see no patterns whatsover i the residuals, normally distributed error, and no clear outliers. 
+
+The quadratic fit is extremely significant at $\alpha = 0.05$, and our $adj-R^2$ value has increased from 0.991 to 0.998. Not a huge improvement with respect to predictive ability, but we ought to think hard about the theory behind all this. Did we anticipate a quadratic fit? Does it make sense? Need we report our results to the theoretical physicists? 
+
+## __(2 p)__ Final model.
+
+Regardless of which scale you choose for the analysis, provide an equation to
+predict pressure from boiling point. Write a short summary, pointing out any
+limitations of your analysis.
+
+### Solution
+
+$$
+\widehat{pressure} = 98.44 - 1.24\times TEMP + 0.0043 \times TEMP^2
+$$
+
+I've already said a lot. Personally, I think limitations might be more about confounding factors in the experimental design. This work was hard to do, and I'm unconvinced that the quadratic fit isn't some artifact of how the experiment was carried out. Otherwise ... I feel pretty good about this one!
+
+#### Example based on the first linear model
+
+_Assuming you called your linear model object `lm_p_b1`,
+  then the equation with code below will place
+  the intercept and slope in the equation.
+Just add an `r ` before each of the `signif(...)` inline code chunks to
+  make the numbers appear.
+Then use this example to write your final model here._
+
+THIS CODE IS BROKEN FOR SOME REASON. REMOVING.
+
+

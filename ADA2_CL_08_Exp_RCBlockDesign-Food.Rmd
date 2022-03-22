@@ -1,0 +1,182 @@
+---
+title: "ADA2: Class 08, Ch 05a Paired Experiments and Randomized Block Experiments"
+subtitle: "Randomized complete block design (RCBD)"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+<!---
+Fictitious example from:
+  http://www.r-tutor.com/elementary-statistics/analysis-variance/randomized-block-design
+-->
+
+# Menu items
+
+A fast food franchise is test marketing 3 new menu items. To find out if they
+have the same popularity, 6 franchisee restaurants are randomly chosen for
+participation in the study. In accordance with the randomized block design,
+each restaurant will be test marketing all 3 new menu items. Furthermore, a
+restaurant will test market only one menu item per week, and it takes 3 weeks
+to test market all menu items. The testing order of the menu items for each
+restaurant is randomly assigned as well.
+The table represents the sales figures of the 3 new menu items in a restaurant
+after a week of test marketing.
+
+# Randomized Complete Block Design (RCBD)
+
+Following the in-class assignment this week,
+  perform a complete RCBD analysis.
+
+1. (2 p) Reshape and plot the data, describe relationships of Sales between Items and Restaurants
+1. (0 p) Fit model
+1. (3 p) Assess model assumptions
+1. (2 p) State and interpret the hypothesis test for difference in Item mean sales
+1. (2 p) If appropriate, perform pairwise comparisons with Tukey HSD correction
+1. (1 p) What is your recommendation to the Franchise?
+
+## Data
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+# read the data
+dat_food <- read.table(text="
+Restaurant Item1 Item2 Item3
+A          31    27    24
+B          31    28    31
+C          45    29    46
+D          21    18    48
+E          42    36    46
+F          32    17    40
+", header = TRUE) %>%
+  as_tibble()
+```
+
+## __(2 p)__ Reshape and plot the data, describe relationships of Sales between Items and Restaurants
+
+The code below will get you started with reshaping the data.
+The rest is up to you!
+
+```{R}
+dat_food_long <-
+  dat_food %>%
+  pivot_longer(
+    cols      = starts_with("Item")
+  , names_to  = "Item"
+  , values_to = "Sales"
+  ) %>%
+  mutate(
+    Item       = factor(Item)
+  , Restaurant = factor(Restaurant)
+  )
+
+str(dat_food_long)
+```
+
+```{R}
+# Group means
+m_dat_b <-
+  dat_food_long %>%
+  group_by(Item) %>%
+  summarize(
+    m = mean(Sales)
+  )
+m_dat_b
+
+m_dat_c <-
+  dat_food_long %>%
+  group_by(Restaurant) %>%
+  summarize(
+    m = mean(Sales)
+  )
+m_dat_c
+```
+
+```{r}
+library(ggpubr)
+gg1 <- ggplot(data = m_dat_b) + 
+  geom_bar(aes(x = Item, y = m), stat = "identity") + 
+  ylab("Average Sales")
+gg2 <- ggplot(data = m_dat_c) + 
+  geom_bar(aes(x = Restaurant, y = m), stat = "identity") + 
+  ylab("Average Sales")
+ggarrange(gg1, gg2, nrow = 1, label.x = "Average Sales")
+```
+
+Based on means alone, looks like Item 2 leads to lowest sales, Item 1 leads to a medium amount of sales, and Item leads to the highest sales. Restaurants A, B, D, and F all appear to have the same sales, whereas restaurants C and E have higher sales, similar to one another.
+
+## __(0 p)__ Fit model
+
+```{r}
+mod1 <- lm(Sales ~ Restaurant + Item, data = dat_food_long)
+car::Anova(mod1)
+```
+
+## __(3 p)__ Assess model assumptions
+
+```{r}
+e_plot_lm_diagostics(mod1, sw_plot_set = "simpleAV")
+```
+
+There are a few violations here. In particular, it looks like there may be an outlier (Observation 12) and heterogenetity of variance across both Items and Restaurants. The residuals do look normally distributed, and the Box-Cox profile indicates no transformation of Sales is warranted.
+
+## __(2 p)__ State and interpret the hypothesis test for difference in Item mean sales
+
+The hypothesis test is: 
+
+H_0: $\mu_1 = \mu_2 = \mu_3$ vs H_1: not all means equal. 
+
+Rejection of this null hypothesis indicates that at least one pair of true means are not equal. 
+
+## __(2 p)__ If appropriate, perform pairwise comparisons with Tukey HSD correction
+
+Yes, it's appropriate!
+
+```{r}
+aov1 <- aov(Sales ~ Item + Restaurant, data = dat_food_long)
+TukeyHSD(aov1)
+```
+
+The Tukey test shows a significant difference between the mean Sales for Item 3 and Item 2 at $\alpha$ 0.05, where Item 3 has average sales 13.33 higher than for Item 2, but the other two pairwise comparisons do not show significant differences. 
+
+We also see no significant differences for pairwise comparisons among any restaurants. 
+
+## __(1 p)__ What is your recommendation to the Franchise?
+
+I recommend using Item 3, since it has the highest sales. Although Item 3 does not show a significantly higher mean than Item 1, this could simply be due to lack of power. 
+

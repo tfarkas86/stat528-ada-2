@@ -1,0 +1,264 @@
+---
+title: "ADA2: Class 03, Ch 02 Introduction to Multiple Linear Regression"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+#knitr::opts_chunk$set(cache = TRUE, autodep=TRUE)  #$
+```
+
+# Auction selling price of antique grandfather clocks
+
+<!---
+Data from http://www.statsci.org/data/general/auction.html
+Mendenhall, W, and Sincich, TL (1993).
+A Second Course in Statistics: Regression Analysis, 6th Edition, Prentice-Hall.
+-->
+
+The data include the selling price in pounds sterling at auction of 32 antique grandfather clocks,
+  the age of the clock in years, and the number of people who made a bid.
+In the sections below, describe the relationship between variables and develop a model
+  for predicting selling `Price` given `Age` and `Bidders`.
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+dat_auction <- read_csv("ADA2_CL_03_auction.csv")
+str(dat_auction)
+summary(dat_auction)
+```
+
+## __(1 p)__ Scatterplot matrix
+
+_In a scatterplot matrix below interpret the relationship between each pair of variables.
+If a transformation is suggested by the plot (that is, because there is a curved relationship),
+  also plot the data on the transformed scale and
+  perform the following analysis on the transformed scale.
+Otherwise indicate that no transformation is necessary._
+
+```{R}
+library(ggplot2)
+library(GGally)
+p <- ggpairs(dat_auction)
+print(p)
+```
+
+
+### Solution
+
+I don't see much of a need for transformation here ... 
+
+##  __(1 p)__ Correlation matrix
+
+_Below is the correlation matrix and tests for the hypothesis that each correlation is equal to zero.
+Interpret the hypothesis tests and relate this to the plot that you produced above._
+
+```{R}
+# correlation matrix and associated p-values testing "H0: rho == 0"
+#library(Hmisc)
+Hmisc::rcorr(as.matrix(dat_auction))
+```
+
+### Solution
+
+The three hypothesis tests are for pairwise correlations. The results show significant correlations between Price and Age, and Price and Bidders, but no between Age and Bidders. 
+
+## __(1 p)__ Plot interpretation
+
+_Below are two plots.
+The first has $y =$ Price, $x =$ Age, and colour = Bidders,
+and the second has $y =$ Price, $x =$ Bidders, and colour = Age.
+Interpret the relationships between all three variables, simultaneously.
+For example, say how Price relates to Age,
+then also how Price relates to Bidders conditional on Age being a specific value._
+
+```{R, fig.height = 4, fig.width = 10, echo=FALSE}
+dat_auction <-
+  dat_auction %>%
+  mutate(
+    id = row_number(), .before = "Age"
+  )
+
+# ggplot: Plot the data with linear regression fit and confidence bands
+library(ggplot2)
+p1 <- ggplot(dat_auction, aes(x = Age, y = Price, label = id))
+p1 <- p1 + geom_point(aes(colour = Bidders), size=3)
+# plot labels next to points
+p1 <- p1 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/4, colour = 2)
+# plot regression line and confidence band
+p1 <- p1 + geom_smooth(method = lm)
+p1 <- p1 + labs(title="Selling Price by Age with colored Bidders")
+#print(p1)
+
+# ggplot: Plot the data with linear regression fit and confidence bands
+library(ggplot2)
+p2 <- ggplot(dat_auction, aes(x = Bidders, y = Price, label = id))
+p2 <- p2 + geom_point(aes(colour = Age), size=3)
+# plot labels next to points
+p2 <- p2 + geom_text(hjust = 0.5, vjust = -0.5, alpha = 1/4, colour = 2)
+# plot regression line and confidence band
+p2 <- p2 + geom_smooth(method = lm)
+p2 <- p2 + labs(title="Selling Price by Bidders with colored Age")
+#print(p2)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2), nrow=1)
+```
+
+### Solution
+
+These plots show pairwise relationships between price and age, and price and bidders, complementing the correlation matrix. It's hard to interpret anything beyond this -- the coloration is just hard to parse. 
+
+
+## __(2 p)__ Multiple regression assumptions (assessing model fit)
+
+_Below the multiple regression is fit.
+Start by assessing the model assumptions by interpretting what you learn from the first six plots (save the added variable plots for the next question)._
+_If assumptions are not met, attempt to address by transforming a variable and
+restart at the beginning using the new transformed variable._
+
+```{R}
+# fit the simple linear regression model
+lm_p_a_b <- lm(Price ~ Age + Bidders, data = dat_auction)
+```
+
+Plot diagnostics.
+```{R, fig.height = 3, fig.width = 10}
+# plot diagnostics
+e_plot_lm_diagostics(lm_p_a_b, sw_plot_set = "simpleAV")
+```
+
+### Solution
+
+From the diagnostic plots above,
+
+  (1) The residuals look pretty darn normal!
+  (2) Cook's distance suggests there are a few potential outliers influencing the fit of this model!
+  (3) Cook's distance vs. leverage shows that the points with high leverage are those exerting undue influence on the model fit. Except for one point with high leverage that does not influence the fit much. 
+  (4) Residuals vs. fitted shows a pretty cloud-like pattern, though middle fitted values seem to show low residuals on average. Not sure this pattern looks too strong. 
+  (5) Residuals vs. Age shows no particular pattern. 
+  (6) Residuals vs. Bidders shows no particular pattern. 
+
+Based on the Box-Cox profile, I'm going to try a log transformation: 
+
+```{r}
+lm_lnp_a_b <- lm(log(Price) ~ Age + Bidders, data = dat_auction)
+summary(lm_lnp_a_b)
+```
+
+```{r}
+e_plot_lm_diagostics(lm_lnp_a_b, sw_plot_set = "simpleAV")
+```
+
+Oh yeah, that looks better. The outliers no longer seem extreme, judging by cooks distance, and the data look even more normal!
+
+## __(1 p)__ Added variable plots
+
+_Use partial regression residual plots (added variable plots)
+  to check for the need for transformations.
+If linearity is not supported, address and restart at the beginning._
+
+```{r}
+car::avPlots(lm_lnp_a_b)
+```
+
+No transformation other than log needed. Those are tight, linear relationships!
+
+### Solution
+
+## __(1 p)__ Multiple regression hypothesis tests
+
+_State the hypothesis test and conclusion for each regression coefficient._
+
+```{R}
+# fit the simple linear regression model
+lm_p_a_b <- lm(Price ~ Age + Bidders, data = dat_auction)
+# use summary() to get t-tests of parameters (slope, intercept)
+summary(lm_p_a_b)
+```
+
+### Solution
+
+Intercept: H$_0$: The mean of log(Price) is 0 when Age and Bidders is 0. H$_\alpha$: Otherwise. 
+
+Age: H$_0$: The effect of Age on ln(Price) is 0, holding Bidders constant. H$_\alpha$: Otherwise. 
+
+Bidders: H$_0$: The effect of Bidderes on ln(Price) is 0, holding Age constant. H$_\alpha$: Otherwise. 
+
+## __(1 p)__ Multiple regression interpret coefficients
+
+_Interpret the coefficients of the multiple regression model._
+
+### Solution
+
+Intercept: The value of ln(Price) for a new clock with no bidders is 5.08. 
+Age: An increase in clock age of one year increase the ln(Price) of the clock by 0.0098. 
+Bidders: An increase in Bidders by one increases the ln(Price) of the clock by 0.067. 
+
+## __(1 p)__ Multiple regression $R^2$
+
+_Interpret the Multiple R-squared value._
+
+
+### Solution
+
+The $R^2$ is 0.91, indicating that 91% of variation in ln(Price) is explained by this model. 
+
+
+## __(1 p)__ Summary
+
+_Summarize your findings in one sentence._
+
+### Solution
+
+Both the age of a clock and the number of bidders on the clock have a strong, positive relationship with the price of clock, together accounting for most of the variation in clock price. 
+
+
+
+
+```{R}
+## Aside: I generally recommend against 3D plots for a variety of reasons.
+## However, here's a 3D version of the plot so you can visualize the surface fit in 3D.
+## I will point out a feature in this plot that we wouldn't see in other plots
+## and it would typically only be detected by careful consideration
+## of a "more complicated" second-order model that includes curvature.
+
+#library(rgl)
+#library(car)
+#scatter3d(Price ~ Age + Bidders, data = dat_auction)
+```
+

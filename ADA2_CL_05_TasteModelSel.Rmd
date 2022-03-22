@@ -1,0 +1,283 @@
+---
+title: "ADA2: Class 05, Ch 03 A Taste of Model Selection for Multiple Regression"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+#knitr::opts_chunk$set(cache = TRUE, autodep=TRUE)
+```
+
+
+# CCHD birth weight
+
+The California Child Health and Development Study involved women on the Kaiser
+Health plan who received prenatal care and later gave birth in the Kaiser
+clinics.  Approximately 19,000 live-born children were delivered in the 20,500
+pregnancies. We consider the subset of the 680 live-born white male infants in the study.
+Data were collected on a variety of features of the child, the mother, and the
+father.
+
+The columns in the data set are, from left to right:
+```
+col   var name   description
+  1   id         ID
+  2   cheadcir   child's head circumference (inches)
+  3   clength    child's length (inches), $y$ response
+  4   cbwt       child's birth weight (pounds)
+  5   gest       gestation (weeks)
+  6   mage       maternal age (years)
+  7   msmoke     maternal smoking (cigarettes/day)
+  8   mht        maternal height (inches)
+  9   mppwt      maternal pre-pregnancy weight (pounds)
+ 10   page       paternal age (years)
+ 11   ped        paternal education (years)
+ 12   psmoke     paternal smoking (cigarettes/day)
+ 13   pht        paternal height (inches)
+```
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+# Leading 0s cause otherwise numeric columns to be class character.
+# Thus, we add the column format "col_double()" for those columns with
+#   leading 0s that we wish to be numeric.
+
+dat_cchd <-
+  read_csv(
+    "~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_05_cchd-birthwt.csv"
+  , col_types =
+    cols(
+      msmoke  = col_double()
+    , mppwt   = col_double()
+    , ped     = col_double()
+    , psmoke  = col_double()
+    )
+  ) %>%
+# only keep the variables we're analyzing
+  select(
+    cbwt
+  , mage, msmoke, mht, mppwt
+  , page, psmoke, pht, ped
+  )
+  #   %>%
+  # slice(
+  #   -123  #  -123 excludes observation (row number) 123
+  # )
+str(dat_cchd)
+head(dat_cchd)
+```
+
+# Rubric
+
+A goal here is to build a multiple regression model to predict child's
+birth weight (column 4, `cbwt`) from the data on the mother and father (columns 6--13).
+A reasonable strategy would be to:
+
+1. Examine the relationship between birth weight and the potential predictors.
+2. Decide whether any of the variables should be transformed.
+3. Perform a backward elimination using the desired response and predictors.
+4. Given the selected model, examine the residuals and check for influential cases.
+5. Repeat the process, if necessary.
+6. Interpret the model and discuss any model limitations.
+
+
+
+## __(1 p)__ Looking at the data
+
+_Describe any patterns you see in the data.
+Are the ranges for each variable reasonable?
+Extreme/unusual observations?
+Strong nonlinear trends with the response suggesting a transformation?_
+
+```{R}
+summary(dat_cchd)
+```
+
+```{R, fig.height = 8, fig.width = 8}
+library(ggplot2)
+library(GGally)
+#p <- ggpairs(dat_cchd)
+# put scatterplots on top so y axis is vertical
+p <-
+  ggpairs(
+    dat_cchd
+  , upper = list(continuous = wrap("points", alpha = 0.2, size = 0.5))
+  , lower = list(continuous = "cor")
+  )
+print(p)
+```
+
+```{R}
+# correlation matrix and associated p-values testing "H0: rho == 0"
+#library(Hmisc)
+dat_cchd %>% as.matrix() %>% Hmisc::rcorr()
+```
+
+### Solution
+
+1. The ranges for these variables look reasonable. One concern is that the max for number of cigarettes is exactly 50 for both mothers and fathers, suggesting anything higher than 50 might be censored. The range for birthweight is very high, suggesting we might want to have included number of days pregnant at birth here, too. 
+
+2. There is one outlier in maternal heigh that is particularly concerning, but we can look at leverage to see how far out it really is. There's also rather few records in the lowest paternal education category, making them somewhat outlier like. 
+
+3. There aren't any very obvious non-linear trends, but we should more closely examine the relationship between maternal smoking and birth weight, which might have a concave, monotonically decreasing pattern. 
+
+## __(2 p)__ Backward selection, diagnostics of reduced model
+
+Below I fit the linear model with all the selected main effects.
+```{R}
+# fit full model
+lm_cchd_full <- lm(cbwt ~ mage + msmoke + mht + mppwt
+                        + page + ped + psmoke + pht
+                      , data = dat_cchd)
+
+library(car)
+#Anova(aov(lm_cchd_full), type=3)
+summary(lm_cchd_full)
+```
+
+```{R, fig.height = 3, fig.width = 10}
+# plot diagnostics
+e_plot_lm_diagostics(lm_cchd_full, sw_plot_set = "simpleAV")
+```
+
+
+Model selection starts here.
+
+```{R}
+## AIC
+# option: test="F" includes additional information
+#           for parameter estimate tests that we're familiar with
+# option: for BIC, include k=log(nrow( [data.frame name] ))
+lm_cchd_red_AIC <- step(lm_cchd_full, direction="backward", test="F")
+lm_cchd_final <- lm_cchd_red_AIC
+summary(lm_cchd_final)
+
+# BIC (not shown)
+# step(lm_cchd_full, direction="backward", test="F", k=log(nrow(dat_cchd)))
+```
+
+Backward selection results in a model with `msmoke`, `mht`, `mppwt`, and `pht`
+  all significant at a 0.05 level.
+
+
+
+__Diagnostics__
+
+```{R, fig.height = 3, fig.width = 10}
+# plot diagnostics
+e_plot_lm_diagostics(lm_cchd_final, sw_plot_set = "simpleAV")
+```
+
+__Discuss the diagnostics in terms of influential observations or problematic structure in the residuals.__
+In particular, if an observation is influential, describe _how_ it is influential;
+  does it change the slope, intercept, or both for the regression surface?
+
+### Solution
+
+Outliers with especially high Cook's distance, like observation 506, will change both the slope and intercept of the regression. Looking at the added-variable plots, I don't see this particular point obviously influencing things very much. The one case that looks problematic to me is 167, which may be major source of the positive relationship between maternal weight and birth weight. A DFBETAs analysis would help determine that. 
+
+## __(3 p)__ Address model fit
+
+If the model doesn't fit well (diagnostics tell you this, not $R^2$ or significance tests),
+  then address the lack of model fit.
+Transformations and removing influential points are two strategies.
+The decisions you make should be based on what you observed in the residual plots.
+If there's an influential observation, remove it and see how that affects
+  the backward selection (whether the same predictors are retained),
+  the model fit (diagnostics),
+  and regression coefficient estimates (betas).
+If there's a pattern in the residuals that can be addressed by a transformation,
+  guess at the appropriate transformation and try it.
+
+Repeat until you are satisfied with the diagnostics meeting the model assumptions.
+Below, briefly outline what you did (no need to show all the output)
+  by (1) identifying what you observed in the diagostics
+  and (2) the strategy you took to address that issue.
+Finally, show the final model and the diagnostics for that.
+Describe how the final model is different from the original;
+  in particular discuss whether variables retained are different from backward selection
+  and whether the sign and magnitude of the regression coefficients are much different.
+
+### Solution
+
+The diagnostics all look pretty great. I'd be comfortable moving forward with this analysis. But let's see what happens if we remove observation 167.
+
+```{r}
+dat_cchd_rm <- dat_cchd %>%
+  slice(-167)
+lm_cchd_full_rm <- lm(cbwt ~ mage + msmoke + mht + mppwt
+                        + page + ped + psmoke + pht
+                      , data = dat_cchd_rm)
+lm_cchd_red_AIC_rm <- step(lm_cchd_full_rm, direction="backward", test="F")
+lm_cchd_final_rm <- lm_cchd_red_AIC_rm
+summary(lm_cchd_final_rm)
+e_plot_lm_diagostics(lm_cchd_final_rm, sw_plot_set = "simpleAV")
+```
+
+No difference. Let's stick with the original model. 
+
+## __(3 p)__ Interpret the final model
+
+What proportion of variation in the response does the model explain over the mean of the response?
+(This quantity indicates how precisely this model will predict new observations.)
+
+
+Finally, write the equation for the final model and interpret each model coefficient.
+Do these quantities make sense?
+
+
+### Solution
+
+The $R^2$ for this model is 0.10, indicating the model explains 10% of the variation in the response.
+
+The equation is: 
+
+$BW_i = 0.6 - 0.018 * MSMOKE_i + 0.46 * MHT_i + 0.009 * MPPWT_i + 0.042 * PHT_i$. 
+This all makes good sense. Smoking is BAD, so it reduces birth weight. That metrics of maternal and paternal body size positively relate to child size is not surprising. 
+
+## __(1 p)__ Inference to whom
+
+To which population of people does this model make inference to?
+Does this generalize to all humans?
+
+Sometimes this is call the "limitations" section.
+By carefully specifying what the population is that inference applies to,
+  often that accounts for the limitations.
+
+### Solution
+
+Oh, goodness no, this does not necessarily generalize to the entire population, since we've restricted attention to only white, male babies (and white parents by extension). It might generalize to the broader population, and (frankly), we might expect it to, given our particular findings, but it doesn't have to. We ought to do more investigation of these patterns for other demographics to see. 

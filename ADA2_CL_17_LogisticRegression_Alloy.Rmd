@@ -1,0 +1,253 @@
+---
+title: "ADA2: Class 17, Ch 11, Logistic Regression"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+#knitr::opts_chunk$set(cache = TRUE, autodep=TRUE)
+```
+
+# Alloy fastener failures
+
+The following data are from a study on the compressive strength of an alloy
+fastener used in the construction of aircraft. Ten pressure loads, increasing
+in units of 200 psi from 2500 psi to 4300 psi, were used with different numbers
+of fasteners being tested at each of the loads. The table below gives the
+number of fasteners failing out of the number tested at each load.
+
+```{R}
+library(tidyverse)
+
+dat_fastener <-
+  read_csv(
+    "~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_17_fastener.csv"
+  ) %>%
+  # Augment the dataset with the `Load` we wish to predict in a later part.
+  bind_rows(
+    c(Load = 3400, Tested = NA, Failed = NA)
+  )
+
+# view data
+dat_fastener
+```
+
+## __(1 p)__ Interpret plot of observed proportions against load
+
+Compute the observed proportion of fasteners failing at each load.
+
+```{R}
+# observed proportions
+dat_fastener <-
+  dat_fastener %>%
+  mutate(
+    p_hat = Failed / Tested
+  )
+```
+
+```{R}
+library(ggplot2)
+p <- ggplot(dat_fastener, aes(x = Load, y = p_hat))
+p <- p + geom_smooth(se = FALSE)
+p <- p + geom_point()
+p <- p + scale_y_continuous(limits = c(0,1))
+p <- p + labs(title = "Observed proportion of fasteners failing at each load")
+print(p)
+```
+
+__Comment__ on how the proportion of failures depends on load.
+
+### Solution
+
+We see the proportion of failures increases in a gently sigmoidal pattern with increasing load, ranging from around 25% to 75%. 
+
+## __(2 p)__ Compute the empirical logits and interpret plot against load
+
+__Compute__ the empirical logits at each load.
+
+```{R}
+# emperical logits
+  ## replace "NA" with the equation for the empirical logits
+## SOLUTION HERE
+# emperical logits
+dat_fastener <-
+  dat_fastener %>%
+  mutate(
+    emp_logit = log((p_hat + .5/nrow(dat_fastener) / (1 - p_hat + .5 / nrow(dat_fastener))))
+  )
+```
+
+Present a graphical summary that provides information on the adequacy of a
+logistic regression model relating the probability of fastener failure as a
+function of load.
+
+```{R}
+library(ggplot2)
+p <- ggplot(dat_fastener, aes(x = Load, y = emp_logit))
+p <- p + geom_point()
+p <- p + geom_smooth(method = lm, se = FALSE)
+p <- p + labs(title = "Empirical logits")
+print(p)
+```
+
+__Interpret__ the plot regarding whether the empirical logits appear linear.
+
+### Solution
+
+Yes, a linear model will perform quite well, but there maybe some quadratic curvature to account for here: The residuals are negative toward the tails and positive in the middle.
+
+## __(2 p)__ Fit a logistic regression model, interpret deviance lack-of-fit
+
+Fit a logistic model relating the probability of fastener failure to load.
+
+```{R}
+glm_fa <-
+  glm(
+    cbind(Failed, Tested - Failed) ~ Load
+  , family = binomial
+  , data = dat_fastener
+  )
+
+# Test residual deviance for lack-of-fit (if > 0.10, little-to-no lack-of-fit)
+dev_p_val <- 1 - pchisq(glm_fa$deviance, glm_fa$df.residual)
+dev_p_val
+```
+
+Look at the residual deviance lack-of-fit statistic.
+__Is there__ evidence of any gross deficiencies with the model?
+
+
+### Solution
+
+The deviance lack-of-fit test is insignificant (p = 0.999), so there is no evidence of gross deficiencies.
+
+## __(2 p)__ Interpret logistic regression coefficients
+
+Does load appear to be a useful predictor of the probability of failure?
+__Interpret__ the hypothesis test.
+
+```{R}
+summary(glm_fa)
+```
+
+### Solution
+
+Load is a significant predictor of failure (p < 0.0001). The parameter estimate for Load in this model is 0.0015, indicating a unit increase in Load leads to an increase in the log odds of failure by 0.0015, or an increase in the odds of failure by 1.0.
+
+## __(1 p)__ Write model equation
+
+__Provide__ an equation relating the fitted probability of fastener failure to
+the load on the probability scale: $\tilde{p} = \ldots$.
+I have provided the equation on the logit scale.
+
+The MLE of the predicted probabilities satisfy the logit equation
+$$
+\log \left( \frac{\tilde{p}}{1-\tilde{p}} \right)
+  =
+  `r signif(glm_fa$coefficients[1], 3)`
++ `r signif(glm_fa$coefficients[2], 3)` \textrm{ Load}
+.
+$$
+
+### Solution
+
+$$
+\tilde{p}
+  =
+  \frac{e^{`r signif(glm_fa$coefficients[1], 3)`
++ `r signif(glm_fa$coefficients[2], 3)` \textrm{ Load}}}{1 + e^{`r signif(glm_fa$coefficients[1], 3)`
++ `r signif(glm_fa$coefficients[2], 3)` \textrm{ Load}}}
+.
+$$
+
+
+## __(0 p)__ Plot the fitted probabilities as a function of Load
+
+_I'll give you this one for free._
+
+```{R}
+# predict() uses all the Load values in dataset, including appended values
+fit_logit_pred <-
+  predict(
+    glm_fa
+  , data.frame(Load = dat_fastener$Load)
+  , type   = "link"
+  , se.fit = TRUE
+  ) %>%
+  as_tibble()
+
+# put the fitted values in the data.frame
+dat_fastener <-
+  dat_fastener %>%
+  mutate(
+    fit_logit    = fit_logit_pred$fit
+  , fit_logit_se = fit_logit_pred$se.fit
+  # added "fit_p" to make predictions at appended Load values
+  , fit_p        = exp(fit_logit) / (1 + exp(fit_logit))
+  # CI for p fitted values
+  , fit_p_lower  = exp(fit_logit - 1.96 * fit_logit_se) / (1 + exp(fit_logit - 1.96 * fit_logit_se))
+  , fit_p_upper  = exp(fit_logit + 1.96 * fit_logit_se) / (1 + exp(fit_logit + 1.96 * fit_logit_se))
+  )
+```
+
+```{R}
+library(ggplot2)
+p <- ggplot(dat_fastener, aes(x = Load, y = p_hat))
+# predicted curve and point-wise 95% CI
+p <- p + geom_ribbon(aes(x = Load, ymin = fit_p_lower, ymax = fit_p_upper), alpha = 0.2)
+p <- p + geom_line(aes(x = Load, y = fit_p), colour = "red")
+# fitted values
+p <- p + geom_point(aes(y = fit_p), size = 2, colour = "red")
+# observed values
+p <- p + geom_point(size = 2)
+p <- p + scale_y_continuous(limits = c(0, 1))
+p <- p + labs(title = "Observed and predicted probability of fastener failure"
+            , y = "Probability"
+              )
+print(p)
+```
+
+
+## __(2 p)__ Interpret the prediction with 95% CI at 3400 psi
+
+Compute the estimated probability of failure when the load is 3400 psi.
+__Provide and interpret__ the 95% CI for this probability.
+
+We have already augmented the data set with the 3400 psi value, so the
+`predict()` function above has already done the calculations for us.
+
+### Solution
+
+The predicted probability of failure when Load is 3400 psi is 0.48, with a 95% confidence interval of (0.44, 0.52). The confidence interval indicates that 95% of new samples drawn from this population will yield predicted probabilities at 3400 psi between 0.44 and 0.52.

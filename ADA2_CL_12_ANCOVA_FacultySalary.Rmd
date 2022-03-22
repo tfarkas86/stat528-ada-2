@@ -1,0 +1,543 @@
+---
+title: "ADA2: Class 12, Ch 07a, Analysis of Covariance: Comparing Regression Lines"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100, error = TRUE)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+
+# ANCOVA model: Faculty political tolerances
+
+A political scientist developed a questionnaire to determine political
+tolerance scores for a random sample of faculty members at her university.
+She wanted to compare mean scores adjusted for the age for each of the
+three categories: full professors (coded 1), associate professors (coded 2),
+and assistant professors (coded 3). The data are given below. Note the higher
+the score, the more tolerant the individual.
+
+Below we will fit and interpret a model to assess the dependence of tolerance
+score on age and rank.
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+dat_tolerate <-
+  read_csv("~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_12_tolerate.csv") %>%
+  mutate(
+    # set 3="Asst" as baseline level
+    rank = factor(rank) %>% relevel(3)
+  , id = 1:n()
+  )
+str(dat_tolerate)
+```
+
+## __(0 p)__ Describe the plotted fitted regression lines
+
+Below is a plot of tolerance against age, using rank as a plotting symbol.
+Describe how tolerance score depends on age within ranks.
+
+```{R, fig.height = 5, fig.width = 8, echo=FALSE}
+library(ggplot2)
+p <- ggplot(dat_tolerate, aes(x = age, y = score, colour = rank))
+#p <- p + geom_point(size = 4)
+p <- p + geom_text(aes(label = rank))
+p <- p + geom_smooth(method = lm, se = FALSE)
+p <- p + labs(title = "Tolerance score data"
+            , caption = "1=Full, 2=Assoc, 3=Asst")
+print(p)
+```
+
+### Solution
+
+[answer]
+
+The data plot suggests that tolerance decreases roughly linearly with age among
+the full professors (rank=1).  The relationship between tolerance and age is
+much weaker (basically horizontal, no relationship) among the assistant
+professors (rank=3) and the associate professors (rank=2).
+
+
+
+## __(0 p)__ Write the full model equation with indicator variables.
+
+Create indicators for full and associate professors, so that assistant
+professors serve as the reference group.
+Write the full model, then the separate model for each rank using general notation.
+
+### Solution
+
+We are interested in creating a multiple regression model that allows
+each rank to have its own regression line. There are three ranks, so two
+indicator variables are needed to uniquely identify each faculty member by
+rank. To have assistant professors serve as the reference group, let $I(\textrm{rank}=1)=1$
+for full professors (rank=1) and $I(\textrm{rank}=1)=0$ otherwise, and set $I(\textrm{rank}=2)=1$ for
+associate professors (rank=2) and $I(\textrm{rank}=2)=0$ otherwise. Also define the two
+interaction or product effects: $I(\textrm{rank}=1)\textrm{ age}$ and $I(\textrm{rank}=2)\textrm{ age}$.
+
+The model that allows separate slopes and intercepts for each rank is given by:
+$$
+  \textrm{score} = \beta_0 + \beta_1 I(\textrm{rank}=1) + \beta_2 I(\textrm{rank}=2) + \beta_3 \textrm{ age} + \beta_4 I(\textrm{rank}=1)\textrm{ age} +
+                \beta_5 I(\textrm{rank}=2)\textrm{ age} + e.
+$$
+For later reference, the model will be expressed by considering the three
+faculty ranks separately. For assistant professors with rank = 3, we have
+$I(\textrm{rank}=1)=I(\textrm{rank}=2)=0$, so
+$$
+  \textrm{score} \ = \ \beta_0 + \beta_3 \textrm{ age} + e.
+$$
+For associates with rank=2, we have $I(\textrm{rank}=1)=0$ and $I(\textrm{rank}=2)=1$, which gives
+$$
+  \textrm{score} \ = \ \beta_0 + \beta_2(1) + \beta_3 \textrm{ age} + \beta_5 \textrm{ age} + e
+      \ = \ (\beta_0 + \beta_2)  + (\beta_3 + \beta_5) \textrm{ age} + e.
+$$
+Lastly, for full professors with rank=1, we have $I(\textrm{rank}=2)=0$ and $I(\textrm{rank}=1)=1$, so
+$$
+  \textrm{score} \ = \ \beta_0 + \beta_1(1) + \beta_3 \textrm{ age} + \beta_4 \textrm{ age} + e
+      \ = \ (\beta_0 + \beta_1)  + (\beta_3 + \beta_4) \textrm{ age} + e.
+$$
+
+The regression coefficients $\beta_0$ and $\beta_3$ are the intercept
+and slope for the assistant professor population regression line. The
+other parameters measure differences in intercepts and slopes across
+the three groups, using assistant professors as a baseline or reference
+group. In particular:
+
+$\beta_1 =$ difference between the intercepts of the full and assistant
+professors population regression lines.
+
+$\beta_2 =$ difference between the intercepts of the associate and assistant
+professors population regression lines.
+
+$\beta_4 =$ difference between the slopes of the  full and assistant
+professors population regression lines.
+
+$\beta_5 =$ difference between the slopes of the  associate and assistant
+professors population regression lines.
+
+
+## __(2 p)__ Test for equal slopes.
+
+Starting with a model that allows each rank to have it's own intercept and
+slope, test whether the slopes are equal. If the hypothesis of equal slopes is
+plausible, fit the model of equal slopes and test whether intercepts are equal.
+
+```{R}
+lm_s_a_r_ar <-
+  lm(
+    score ~ age * rank
+  , data = dat_tolerate
+  )
+```
+
+In your answer, first assess model fit.
+
+```{R, fig.height = 3, fig.width = 10}
+# plot diagnostics
+e_plot_lm_diagostics(lm_s_a_r_ar)
+```
+
+Then, test the hypothesis of equal slopes.
+```{R}
+library(car)
+Anova(aov(lm_s_a_r_ar), type=3)
+```
+
+
+### Solution
+
+The model diagnostics are mixed, but pretty good, in my opinion. We see very little deviation from normally distributed error. There are no clear outliers influencing the fit, despite the large hat values of the intolerant full professors. Error variance is mostly constant across fitted values (for which there is a non-significant test) and age, though we see the rank 1 and 2 professors have more error variance than the full professors. There is also no order affect (assuming the index indicates the order in which surveyors asked their questions). There some concern about collinearity, which essentially exists because full professors are the only professors over 50 years old, but this is less of an issue when testing with an interaction, since each group gets their own fit. 
+
+The ANOVA results show a clear interaction between age and rank (p = 0.029) at $\alpha = 0.05$, suggesting the slopes of regression for score on age differs among ranks, as is clearly evident in the figure.
+
+## __(1 p)__ Reduce the model.
+
+Given the tests in the previous part, reduce the model using backward selection.
+
+1. Start with the full model, test for equal slopes.
+2. If slopes are equal (not significantly for being different), then test for equal intercepts.
+3. If intercepts are equal, test for any slope.
+4. If slope is zero, then the grand mean intercept is the best model.
+
+### Solution
+
+We cannot reduce this model further, since there is a significant interaction between rank and age!
+
+## __(0 p)__ Write the fitted model equation.
+
+Last class you wrote these model equations.
+Modify to your reduced model if necessary.
+
+```{R}
+summary(lm_s_a_r_ar)
+```
+
+### Solution
+
+Modify if your reduced model is different.
+
+1: full professors
+$$\widehat{\textrm{score}} = 5.427 + 2.785 + (-0.013 -0.072) \textrm{ age} = 8.212 - 0.085 \textrm{ age}$$
+
+2: associate professors
+$$\widehat{\textrm{score}} = 5.427 - 1.223 + (-0.013 +0.030) \textrm{ age} = 4.204 + 0.017 \textrm{ age}$$
+
+3: assistant professors
+$$\widehat{\textrm{score}} = 5.427 - 0.013 \textrm{ age}$$
+
+
+## __(1 p)__ Aside: regression line estimation with interaction
+
+(The question is at the bottom of this exposition.)
+
+One feature to notice is that the observation 7 in the group of full professors
+appears to have an unusually low tolerance for his age (2.70 52 1). If you
+temporarily hold this observation out of the analysis, you still conclude that
+the population regression lines have different slopes.
+
+```{R}
+# exclude observation 7 from tolerate7 dataset
+dat_tolerate7 <-
+  dat_tolerate %>%
+  slice(-7)
+
+lm7_s_a_r_ar <-
+  lm(
+    score ~ age * rank
+  , data = dat_tolerate7
+  )
+library(car)
+Anova(aov(lm7_s_a_r_ar), type=3)
+summary(lm7_s_a_r_ar)
+```
+
+This observation has a fairly large impact on the estimated intercept and slope
+for the full professor regression line, __but has no effect whatsoever on the
+estimated intercepts or slopes for the two other ranks. Why?__
+
+```{R}
+# full data set
+coef(lm_s_a_r_ar)  %>% round(4)
+# without obs 7
+coef(lm7_s_a_r_ar) %>% round(4)
+```
+
+### Solution
+
+Because we fit an interaction term between rank and age, we estimate separate regression lines (score vs. age) for each rank. Furthermore, the intercept and age parameter refer to the mean and regression slope for assistant professors. Any change to the data for full professors will therefore only affect parameter estimates describing the regression of score on age for full professors. 
+
+# Additional analyses, possible directions
+
+We'll explore four possible sets of additional analyses that help us understand the relationships we found.
+
+There are a number of possible directions here.
+We found earlier that there was an interaction, so there's evidence for different slopes.
+
+1. Use the Wald test to perform pairwise comparisons
+  for the __regression line slope__ between ranks.
+
+2. Use the Wald test to perform pairwise comparisons
+  for the __regression line slope and intercept__ between ranks.
+
+3. Observe that Full professors (rank = 1) are the only ones that have
+  ages greater than 50, and those three observations are systematically different from
+  scores for faculty not older than 50 --
+  thus __these three observations could be removed__ and inference could be limited to
+  faculty from 25--50 years old.
+
+4. Combine the junior faculty (__assistant and associate: AA__).
+
+Other ideas are possible, but these are enough.
+
+## __(0 p)__ Direction 1: pairwise comparison of regression line slope between ranks
+
+I'll get you started using the Wald test to set up 1+ degree-of-freedom
+hypothesis tests.
+
+Earlier we found that slopes are different.
+We will use the Wald test to perform comparisons of slopes between pairs of ranks.
+
+We'll discuss the linear algebra specification of these hypothesis test in class.
+
+### Solution
+
+The tests below indicate that there's an interaction because the slopes for
+Ranks 1 and 2 differ.
+Because we're performing three tests, it is appropriate to compare these p-values
+  to a significance level controlling the familywise Type-I error rate;
+  the Bonferroni threshold is 0.05/3=`r signif(0.05/3, 4)`.
+
+```{R}
+# first, find the order of the coefficients
+coef(lm_s_a_r_ar)
+
+library(aod) # for wald.test()
+
+## H0: Slope of Rank 1 = Rank 3 (similar to summary table above)
+mR <-
+  rbind(
+    c(0, 0, 0, 0, 1, 0)
+  ) %>%
+  as.matrix()
+vR <- c(0)
+
+test_wald <-
+  wald.test(
+    b     = coef(lm_s_a_r_ar)
+  , Sigma = vcov(lm_s_a_r_ar)
+  , L     = mR
+  , H0    = vR
+  )
+test_wald
+
+## H0: Slope of Rank 2 = Rank 3 (similar to summary table above)
+mR <-
+  rbind(
+    c(0, 0, 0, 0, 0, 1)
+  ) %>%
+  as.matrix()
+vR <- c(0)
+
+test_wald <-
+  wald.test(
+    b     = coef(lm_s_a_r_ar)
+  , Sigma = vcov(lm_s_a_r_ar)
+  , L     = mR
+  , H0    = vR
+  )
+test_wald
+
+## H0: Slope of Rank 1 = Rank 2 (not in summary table above)
+mR <-
+  rbind(
+    c(0, 0, 0, 0, 1, -1)
+  ) %>%
+  as.matrix()
+vR <- c(0)
+
+test_wald <-
+  wald.test(
+    b     = coef(lm_s_a_r_ar)
+  , Sigma = vcov(lm_s_a_r_ar)
+  , L     = mR
+  , H0    = vR
+  )
+test_wald
+```
+
+## __(2 p)__ Direction 2: pairwise comparison of regression lines (slope and intercept) between ranks
+
+To test whether the regression line is different between ranks,
+  in the null hypothesis $H_0$ we need to set both the slope and the intercept equal
+  between a selected pair of ranks.
+
+Here's the first example:
+```{R}
+# first, find the order of the coefficients
+coef(lm_s_a_r_ar)
+
+library(aod) # for wald.test()
+
+## H0: Line of Rank 1 = Rank 3
+mR <-
+  rbind(
+    c(0, 0, 1, 0, 0, 0)
+  , c(0, 0, 0, 0, 1, 0)
+  ) %>%
+  as.matrix()
+vR <- c(0, 0)
+
+test_wald <-
+  wald.test(
+    b     = coef(lm_s_a_r_ar)
+  , Sigma = vcov(lm_s_a_r_ar)
+  , L     = mR
+  , H0    = vR
+  )
+test_wald
+```
+
+### Solution
+
+What is the question? This Wald test shows that there is no evidence to reject the null hypothesis of equal slopes for ranks 1 and 3 (p = 0.16). 
+
+
+## __(1 p)__ Direction 3: exclude ages $> 50$ and reanalyze
+
+Drop observations with `age > 50` and refit the model.
+Remember to check model assumptions, then do backward selection (manually), then check the final model assumptions.
+
+### Solution
+
+```{R}
+# first, find the order of the coefficients
+dat <- dat_tolerate %>%
+  filter(age < 50) 
+lm_s_a_r_ar <- lm(score ~ age + rank, data = dat)
+e_plot_lm_diagostics(lm_s_a_r_ar)
+Anova(lm_s_a_r_ar)
+
+coef(lm_s_a_r_ar)
+
+library(aod) # for wald.test()
+
+## H0: Line of Rank 1 = Rank 3
+mR <-
+  rbind(
+    c(0, 0, 1, 0, 0, 0)
+  , c(0, 0, 0, 0, 1, 0)
+  ) %>%
+  as.matrix()
+vR <- c(0, 0)
+
+test_wald <-
+  wald.test(
+    b     = coef(lm_s_a_r_ar)
+  , Sigma = vcov(lm_s_a_r_ar)
+  , L     = mR
+  , H0    = vR
+  )
+test_wald
+```
+
+There's no interaction without the old full professors, so we remove the interaction term, and find no effect of either age (p = 0.99) or rank (p = 0.62). The resulting diagnostics show no reason for alarm. 
+
+## __(3 p)__ Direction 4: Combine the junior faculty (asst and assoc)
+
+
+Create a new factor variable `rankaa` that combines ranks 2 and 3 as value `0`,
+  but has rank 1 still value `1`.
+
+```{R}
+dat_tolerate <-
+  dat_tolerate %>%
+  mutate(
+    # indicator for Full vs (Assist & Assoc)
+    rankaa =
+      case_when(
+        rank %in% c(2, 3) ~ 0     # Assist & Assoc
+      , rank %in% c(1   ) ~ 1     # Full
+      )
+  , rankaa = factor(rankaa)
+  , rankaa = relevel(rankaa, "0")
+  )
+```
+
+Note that in Direction 2 above we tested whether the assistants and the
+associates have the same population regression line and found they were not
+statistically different. We had performed a simultaneous hypothesis test, same as below.
+(Note that this is an alternate way to do the simultaneous test when we are
+testing that the coefficients are equal to zero (using `Terms = c(4, 6)`); we
+did this differently above because I wanted to show the more general way of
+comparing whether coefficients were also equal to each other or possibly equal
+to a value different from zero).
+
+```{R}
+coef(lm_s_a_r_ar)
+library(aod) # for wald.test()
+# Typically, we are interested in testing whether individual parameters or
+#   set of parameters are all simultaneously equal to 0s
+# However, any null hypothesis values can be included in the vector coef.test.values.
+
+coef_test_values <-
+  rep(0, length(coef(lm_s_a_r_ar)))
+
+library(aod) # for wald.test()
+test_wald <-
+  wald.test(
+    b     = coef(lm_s_a_r_ar) - coef_test_values
+  , Sigma = vcov(lm_s_a_r_ar)
+  , Terms = c(4, 6)
+  )
+test_wald
+```
+
+The p-value for this test is approximately 0.7, which suggests that the
+population regression lines for these two groups are not significantly
+different.
+
+At this point I would refit the model,
+  omitting the $I(\textrm{rank}=2)$ and $I(\textrm{rank}=2)\textrm{ age}$ effects.
+$$
+  \textrm{score} = \beta_0 + \beta_1 I(\textrm{rank}=1) + \beta_3 \textrm{ age} + \beta_4 I(\textrm{rank}=1)\textrm{ age} + e.
+$$
+This model produces two distinct regression lines, one for the full professors
+and one for the combined assistants and associates.
+
+__Do this.__
+
+Using the combined AA rank data, do the following and interpret each result:
+
+1. plot the data
+2. fit the full interaction model, reduce if possible
+3. write out the separate model equations for the Full and AA ranks
+4. check model assumptions
+5. reduce the model (if appropriate) and recheck assumptions
+
+
+
+### Solution
+
+```{r}
+dat_tolerate %>%
+  ggplot(aes(x = age, y = score, color = rankaa)) + 
+  geom_point() + 
+  geom_smooth(method = "lm")
+```
+
+```{r}
+mod_lm_aa <- lm(score ~ rankaa * age, data = dat_tolerate)
+Anova(mod_lm_aa, type = 3)
+summary(mod_lm_aa)
+```
+
+# Full Profs
+$$
+\widehat{score} = 4.99 + 3.22 + AGE(-0.002 - 0.08) = 8.21 - 0.082 * AGE
+$$
+# AAs
+$$
+\widehat{score} = 4.99 - 0.002 * AGE
+$$
+```{r}
+e_plot_lm_diagostics(mod_lm_aa)
+```
+
+The assumptions show no major violations, and since the interaction term is highly significant (p = 0.009), we do not reduce the model. 

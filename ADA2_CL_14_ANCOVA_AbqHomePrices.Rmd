@@ -1,0 +1,486 @@
+---
+title: "ADA2: Class 14, Ch 07b, Analysis of Covariance"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+  pdf_document:
+    df_print: kable
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+This is a challenging dataset, in part because it's real and messy.
+I will guide you through a simplified sensible analysis,
+  but other models are possible.
+
+_Note that I needed to set `cache=FALSE` to assure all output was updated._
+
+# ANCOVA model: Albuquerque NM 87108, House and Apartment listing prices
+
+Prof Erhardt constructed a dataset of listing prices for dwellings (homes and apartments) for sale from
+  [Zillow.com](http://www.zillow.com/homes/for_sale/Albuquerque-NM-87108/95303_rid/any_days/35.095087-106.52167835.035021-106.633258_rect/13_zm/0_mmm/)
+  on Feb 26, 2016 at 1 PM for Albuquerque NM 87108.
+In this assignment we'll develop a model to help understand which qualities that
+  contribute to a __typical dwelling's listing price__.
+We will then also predict the listing prices of new listings
+  posted on the following day, Feb 27, 2016 by 2 PM.
+
+Because we want to model a _typical dwelling_,
+  it is completely reasonable to remove "unusual" dwellings from the dataset.
+Dwellings have a distribution with a [long tail](https://en.wikipedia.org/wiki/Long_tail)!
+
+
+## Unusual assignment, not top-down, but up-down-up-down
+
+This is an unusual assignment because the workflow of this assignment isn't top-down;
+  instead, you'll be scrolling up and down as you make decisions about the data and model you're fitting.
+Yes, I have much of the code worked out for you.
+However, there are data decisions to make early in the code
+  (such as excluding observations, transforming variables, etc.)
+  that depend on the analysis (model checking) later.
+Think of it as a "choose your own adventure" that I've written for you.
+
+### Keep a record of your decisions
+
+It is always desirable to make your work reproducible,
+  either by someone else or by your future self.
+For each step you take, keep a diary of
+  (a) what the next minor goal is,
+  (b) what evidence/information you have,
+  (c) what decision you make, and
+  (d) what the outcome was.
+
+For example, here's the first couple steps of your diary:
+
+1. Include only "typical dwellings".  Based on scatterplot, remove extreme observations.  Keep only HOUSE and APARTMENT.
+2. Exclude a few variables to reduce multicollinearity between predictor variables.  Exclude `Baths` and `LotSize`.d
+3. etc.
+
+
+
+
+
+
+## __(2 p)__ (Step 1) Restrict data to "typical" dwellings
+
+__Step 1:__
+After looking at the scatterplot below, identify what you consider to be a "typical dwelling"
+and exclude observations far from that range.
+For example, there are only a couple `TypeSale` that are common enough to model;
+  remember to run `factor()` again to remove factor levels that no longer appear.
+
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+library(car)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data, skip the first two comment lines of the data file
+dat_abq <-
+  read_csv("~/Dropbox/3_Education/Courses/stat_528_ada2/ADA2_CL_14_HomePricesZillow_Abq87108.csv", skip=2) %>%
+  mutate(
+    id = 1:n()
+  , TypeSale = factor(TypeSale)
+    # To help scale the intercept to a more reasonable value
+    #   Scaling the x-variables are sometimes done to the mean of each x.
+    # center year at 1900 (negative values are older, -10 is built in 1890)
+  , YearBuilt_1900 = YearBuilt - 1900
+  , logPriceList = log(PriceList, 10)
+  , logSizeSqft = log(Size_sqft, 10)
+  ) %>%
+  select(
+    id, everything()
+    , -Address, -YearBuilt
+  )
+
+head(dat_abq)
+
+## RETURN HERE TO SUBSET THE DATA
+
+dat_abq <-
+  dat_abq %>%
+  filter(
+    TypeSale %in% c("APARTMENT", "HOUSE"), 
+    PriceList < 6e5
+  ) %>%
+  mutate(across(TypeSale, ~factor(TypeSale))) %>%
+  select(-c(Baths, LotSize))
+# note, if you remove a level from a categorical variable, then run factor() again
+
+  # SOLUTION
+  # these deletions are based only on the scatter plot in order to have
+  #  "typical" dwellings
+
+str(dat_abq)
+table(dat_abq$TypeSale)
+
+dat_abq %>%
+  ggplot() + 
+  geom_histogram(aes(x = logPriceList))
+```
+
+
+## __(2 p)__ (Step 3) Transform response, if necessary.
+
+__Step 3:__
+Does the response variable require a transformation?
+If so, what transformation is recommended from the model diagnostic plots (Box-Cox)?
+
+### Solution
+
+```{R}
+dat_abq <-
+  dat_abq %>%
+  mutate(
+    # Price in units of $1000
+    PriceListK = PriceList / 1000
+
+    # SOLUTION
+  ) %>%
+  select(
+    -PriceList
+  )
+
+str(dat_abq)
+```
+
+```{r}
+mod1 <- lm(logPriceList ~ Beds + Size_sqft + DaysListed + YearBuilt_1900, 
+           data = dat_abq)
+boxCox(mod1)
+```
+
+The log transformation is clearly supported by the Box-Cox profile. 
+
+## __(2 p)__ (Step 4) Remove extremely influential observations.
+
+__Step 4:__
+The goal is to develop a model that will work well for the typical dwellings.
+If an observation is highly influential, then it's unusual.
+
+
+```{R}
+e_plot_lm_diagostics(mod1)
+
+## Remove influential observation
+  dat_abq <-
+    dat_abq %>%
+    filter(
+      YearBuilt_1900 < 100, 
+      PriceListK < 539, 
+      DaysListed < 1000, 
+      Size_sqft < 7000
+    ) 
+
+mod1 <- lm(logPriceList ~ Beds + Size_sqft + DaysListed + YearBuilt_1900 + I(YearBuilt_1900^2), 
+           data = dat_abq)
+
+e_plot_lm_diagostics(mod1)
+```
+
+This looks pretty good. Adding a quadratic term for year built seems to work. The 70s were really bad. Just awful.  
+
+## Subset data for model building and prediction
+
+Create a subset of the data for building the model,
+  and another subset for prediction later on.
+
+```{R}
+# remove observations with NAs
+dat_abq <-
+  dat_abq %>%
+  na.omit()
+
+# the data subset we will use to build our model
+dat_sub <-
+  dat_abq %>%
+  filter(
+    DaysListed > 0
+  )
+
+# the data subset we will predict from our model
+dat_pred <-
+  dat_abq %>%
+  filter(
+    DaysListed == 0
+  ) %>%
+  mutate(
+    # the prices we hope to predict closely from our model
+    PriceListK_true = logPriceList
+    # set them to NA to predict them later
+  , PriceListK = NA
+  )
+```
+
+Scatterplot of the model-building subset.
+
+```{R, fig.height = 8, fig.width = 8}
+# NOTE, this plot takes a long time if you're repeadly recompiling the document.
+# comment the "print(p)" line so save some time when you're not evaluating this plot.
+library(GGally)
+library(ggplot2)
+p <-
+  ggpairs(
+    dat_sub %>% select(-id)
+  , mapping = ggplot2::aes(colour = TypeSale, alpha = 0.5)
+  , lower = list(continuous = "points")
+  , upper = list(continuous = "cor")
+  , progress = FALSE
+  )
+print(p)
+```
+
+
+All the apartments appear to have only one bed, yet they are larger? Something fishy there. 
+
+For both number of beds (houses only) and square footage, we see clear positive relationships with listing price. 
+
+There may be an outlier in the number of days listed ... but it wasn't apparent in the diagnostics, so I'm going to roll with it. 
+
+The log-transformed data look more normally distributed than the raw data. 
+
+### Solution
+
+[answer]
+
+Features of data:
+
+
+
+
+## __(2 p)__ (Step 2) Fit full two-way interaction model.
+
+_You'll revisit this section after each modification of the data above._
+
+__Step 2:__
+Let's fit the full two-way interaction model and assess the assumptions.
+However, some of the predictor variables are highly correlated.
+Recall that the interpretation of a beta coefficient is
+  "the expected increase in the response for a 1-unit increase in $x$
+  with all other predictors held constant".
+It's hard to hold one variable constant if it's correlated with another variable you're increasing.
+Therefore, we'll make a decision to retain some variables but not others
+  depending on their correlation values.
+(In the PCA chapter, we'll see another strategy.)
+
+Somewhat arbitrarily, let's exclude `Baths` (since highly correlated with `Beds` and `Size_sqft`).
+Let's also exclude `LotSize` (since highly correlated with `Size_sqft`).
+Modify the code below.
+Notice that because APARTMENTs don't have more than 1 Beds or Baths,
+  those interaction terms need to be excluded from the model;
+  I show you how to do this manually using the `update()` function.
+
+Note that the formula below `y ~ (x1 + x2 + x3)^2` expands into all main effects and two-way interactions.
+
+
+```{R}
+  ## SOLUTION
+dat_sub <- dat_sub %>%
+  filter(! id %in% c(59, 74, 75))
+
+  lm_full <-
+    lm(
+      logPriceList ~ (TypeSale + Beds + logSizeSqft + DaysListed + YearBuilt_1900)^2
+    , data = dat_sub
+    )
+  #lm_full <-
+  #  lm(
+  #    PriceListK ~ (Beds + Baths + Size_sqft + LotSize + DaysListed + YearBuilt_1900)^2
+  #  , data = dat_sub
+  #  )
+  lm_full
+  library(car)
+  try(Anova(lm_full, type=3))
+  ## Note that this doesn't work because APARTMENTs only have 1 bed and 1 bath.
+  ## There isn't a second level of bed or bath to estimate the interaction.
+  ## Therefore, remove those two terms
+  lm_full <-
+    update(
+      lm_full
+    , . ~ . - TypeSale:Beds
+    )
+  library(car)
+  try(Anova(lm_full, type=3))
+```
+
+
+```{R, fig.height = 3, fig.width = 10}
+## Uncomment this line when you're ready to assess the model assumptions
+# plot diagnostics
+e_plot_lm_diagostics(lm_full)
+
+# List the row numbers with id numbers
+#   The row numbers appear in the residual plots.
+#   The id number can be used to exclude values in code above.
+dat_sub %>% select(id) %>% print(n = Inf)
+```
+
+After Step 2, interpret the residual plots.
+What are the primary issues in the original model?
+
+See discussion above. There were a lot of outliers influencing the data, and the response needed a transformation. AFter removing outliers, the data don't seem all that normally distributed anymore. They're pretty close though, so we'll just keep moving along. 
+
+### Solution
+
+[answer]
+
+
+
+
+## __(2 p)__ (Step 5) Model selection, check model assumptions.
+
+Using `step(..., direction="both")` with the BIC criterion,
+  perform model selection.
+
+
+### Solution
+
+```{R, fig.height = 3, fig.width = 8}
+## BIC
+# option: test="F" includes additional information
+#           for parameter estimate tests that we're familiar with
+# option: for BIC, include k=log(nrow( [data.frame name] ))
+lm_red_BIC <-
+  step(
+    lm_full
+  , direction = "both"
+  , test = "F"
+  , trace = 0
+  , k = log(nrow(dat_sub))
+  )
+lm_final <- lm_red_BIC
+lm_red_BIC
+```
+```{R, fig.height = 3, fig.width = 10}
+## Uncomment this line when you're ready to assess the model assumptions
+# plot diagnostics
+e_plot_lm_diagostics(lm_final)
+```
+
+So, the model that included a quadratic term for year built was selected by stepwise regression, but it resulted in a dubious, complex model. I simplified things by removing the quadratic, leading to an additive model with good diagnostics. There do not appear to be outliers, the residuals are (mostly) normally distributed, and variance is well stabilized. 
+
+## __(4 p)__ (Step 6) Plot final model, interpret coefficients.
+
+If you arrived at the same model I did,
+  then the code below will plot it.
+Eventually (after Step 7), the fitted model equations will describe the
+  each dwelling `TypeSale`
+  and interpret the coefficients.
+
+
+```{R, fig.height = 5, fig.width = 8, echo=FALSE}
+library(ggplot2)
+p <- ggplot(dat_sub, aes(x = logSizeSqft, y = logPriceList, colour = TypeSale, shape = TypeSale))
+p <- p + geom_point(size = 2, alpha = 1)
+#p <- p + expand_limits(x = 0, y = 8.5)
+p <- p + geom_smooth(method = lm, se = FALSE) # , alpha=0.15, fullrange = TRUE)
+p <- p + labs(title="Log Listing Price", x = "LogSize_sqft")
+print(p)
+```
+
+```{R}
+library(car)
+#Anova(lm_final, type=3)
+summary(lm_final)
+```
+
+Fitted model equation is
+$$
+  \widehat{\log(\text{PriceList})}
+    =
+2.45
++ 0.216 \times \text{I}(TypeSale = House)
++ 0.882 \times LogSqFt
+- .004 \times YearBuilt
+
+$$
+
+### Solution
+
+After Step 7, return and intepret the model coefficients above.
+
+The intercept isn't worth interpreting, since it's relevant when Size (sqft) is 0, a ridiculous and terrifying idea 
+
+The significant effect of TypeSale indicates that houses list for higher prices than apartment. The significant effect of logSizeSqft indicates a positive relationship between listing price and size for both apartments and houses. Lastly, the significant negative relationship with YearBuilt indicates older houses list for higher prices. 
+
+## __(2 p)__ (Step 7) Transform predictors.
+
+We now have enough information to see that a transformation of a predictor can be useful.
+See the curvature with `Size_sqft`?
+This is one of the headaches of regression modelling,
+  _everything depends on everything else_
+  and you learn as you go.
+Return to the top and transform `Size_sqft` and `LotSize`.
+
+A nice feature of this transformation is that the model interaction goes away.
+Our interpretation is now on the log scale, but it's a simpler model.
+
+I don't know how to get points here. I did it. 
+
+## __(4 p)__ (Step 8) Predict new observations, interpret model's predictive ability.
+
+Using the `predict()` function, we'll input the data we held out to predict earlier,
+  and use our final model to predict the `PriceListK` response.
+Note that `10^lm_pred` is the table of values on the scale of "thousands of dollars".
+
+Interpret the predictions below the output.
+
+How well do you expect this model to predict? Justify your answer.
+
+```{R}
+# predict new observations, convert to data frame
+lm_pred <-
+  as.data.frame(
+    predict(
+      lm_final
+    , newdata = dat_pred
+    , interval = "prediction"
+    )
+  ) %>%
+  mutate(
+    # add column of actual list prices
+    PriceListK = dat_pred$PriceListK_true
+  )
+lm_pred
+# on "thousands of dollars" scale
+10^lm_pred
+
+# attributes of the three predicted observations
+dat_pred %>% print(n = Inf, width = Inf)
+```
+
+### Solution
+
+It didn't do so great, but we don't have a benchmark in any case. Personally, I think we ought not to have chosen the 0 days listed properties, which typically will list for higher than older properties. Indeed, we see that we are under-predicting the property listing values here. A better approach would be to randomly sample a handfull (20%?) of properties for prediction, and use DaysListed as a feature in the prediction process.
