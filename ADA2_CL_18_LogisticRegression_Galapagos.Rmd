@@ -156,13 +156,11 @@ dat_gal_pred_true <-
 #  (there must be a better way to NA selected rows, but I didn't find it)
 dat_gal <-
   dat_gal %>%
-  mutate(
-    Plants    = ifelse(Island %in% island_pred_list, NA, Plants   )
-  , PlantEnd  = ifelse(Island %in% island_pred_list, NA, PlantEnd )
-  , p_hat     = ifelse(Island %in% island_pred_list, NA, p_hat    )
-  , emp_logit = ifelse(Island %in% island_pred_list, NA, emp_logit)
-  )
+  mutate(across(c(Plants, PlantEnd, p_hat, emp_logit), 
+                ~ ifelse(Island %in% island_pred_list, NA, .x)) )  
 ```
+
+See above a more compact solution. 
 
 __Data modifications__
 
@@ -232,7 +230,7 @@ Then, drop outliers, transform and update your comments, and repeat until satisf
 
 __Proportion plots: __
 
-[answer]
+
 
 
 
