@@ -1,0 +1,361 @@
+---
+title: "ADA2: Class 21, Ch 13, Principal Components Analysis (PCA)"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+  pdf_document:
+    df_print: kable
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+# NM County-level Poverty Data
+
+In this example we'll use NM county-level poverty data to understand how
+  counties differ by living conditions, and how those living conditions
+  vary together.
+We hope to reduce our 13-dimensional dataset to the vital few components
+  that explain about 75% of the variability.
+
+__Maps:__ _Labels are easier to read on the left, but road features on right make the counties easier to place._
+<img src="https://geology.com/county-map/new-mexico-county-map.gif" width = 400>
+<img src="https://www.worldmap1.com/map/united-states/new-mexico/new_mexico_counties_map.gif" width = 400>
+
+Here is a description of the codebook for this data.
+
+```
+NM county-level poverty data from S16 student:
+Nathan Dobie, Student Technical Specialist, Bureau of Business Economic Research, UNM
+Thanks, Nathan!
+
+Data combined from:
+http://bber.unm.edu/county-profiles                                        (poverty)
+http://factfinder.census.gov/bkmk/table/1.0/en/ACS/14_5YR/DP04/0400000US35 (other values)
+http://www2.census.gov/geo/docs/reference/codes/files/national_county.txt  (county names)
+
+DATA COLUMNS:
+ 1 area
+ 2 county
+ 3 periodyear (2014)
+   -Vacancy Status %
+ 4   Homeowner vacancy rate
+ 5   Rental vacancy rate
+   -Occupancy Status %
+ 6   Owner-occupied
+ 7   Renter-occupied
+   -Main source of heating (% of homes)
+ 8   Utility gas
+ 9   Electricity
+10   Wood
+11 Lacking complete plumbing facilities %
+12 No telephone service available %
+13 rentover35        (gross rent as a percentage of household income (grapi))
+   -Poverty
+14   est_percent     (Estimated percent of people of all ages in poverty)
+15   child_percent   (Estimate of people age 0-17 in poverty)
+16   fam_percent     (Estimated percent of related children age 5-17 in families in poverty)
+```
+
+
+```{R}
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+dat_nmcensus <-
+  read_csv(
+    "ADA2_CL_21_PCA_NMCensusPovertyHousingCharacteristics_DP04.csv"
+  , skip = 1
+  ) %>%
+  rename(
+    # Shorter column names
+    "Area"     = "area"
+  , "County"   = "county"
+  , "Year"     = "periodyear"
+  , "VacantH"  = "Homeowner vacancy rate"
+  , "VacantR"  = "Rental vacancy rate"
+  , "Owner"    = "Owner-occupied"
+  , "Renter"   = "Renter-occupied"
+  , "HeatG"    = "Utility gas"
+  , "HeatE"    = "Electricity"
+  , "HeatW"    = "Wood"
+  , "NoPlumb"  = "Lacking complete plumbing facilities"
+  , "NoPhone"  = "No telephone service available"
+  , "Rent35"   = "rentover35"
+  , "PovAll"   = "est_percent"
+  , "PovChild" = "child_percent"
+  , "PovFam"   = "fam_percent"
+  ) %>%
+  filter(
+    # remove state average, use county-level
+    Area != 0
+  )
+
+# remove column attributes from read_csv()
+attr(dat_nmcensus, "spec") <- NULL
+
+# columns to use for analysis,
+use_col_ind <- c(4:6, 8:14)
+use_col_names <- names(dat_nmcensus)[use_col_ind]
+use_col_names
+
+str(dat_nmcensus)
+```
+
+Place your code to subset, filter, or transform variables in this code chunk below.
+
+```{R}
+dat_nmcensus <-
+  dat_nmcensus %>%
+  filter(
+    TRUE
+  )
+
+```
+
+## __(2 p)__ Scatterplot matrix of variables of interest
+
+```{R, fig.height = 8, fig.width = 8}
+# Scatterplot matrix
+library(ggplot2)
+library(GGally)
+p <-
+  ggpairs(
+    dat_nmcensus %>% select(use_col_names)
+  )
+print(p)
+```
+
+In the scatterplot matrix __describe qualitatively what you see__.
+
+### Solution
+
+[answer]
+
+
+
+## __(1 p)__ Remove the one most extreme county
+
+One coutry is seriously "rustic".
+Remove that one observation at the end of the data section above,
+  then rerun the analysis.
+
+### Solution
+
+[answer]
+
+
+
+## __(0 p)__ PCA using correlation matrix
+
+The PCA output below will be used for the rest of the assignment.
+
+```{R, fig.height = 5, fig.width = 8}
+pca_nmcensus <-
+  princomp(
+    dat_nmcensus[, use_col_ind]
+  , cor = TRUE
+  )
+summary(pca_nmcensus)
+
+pca_nmcensus %>% loadings() %>% print(cutoff = 0.2) # cutoff = 0 to show all values
+
+par(mfrow=c(1,2))
+screeplot(pca_nmcensus)
+biplot(pca_nmcensus)
+par(mfrow=c(1,1))
+```
+
+## __(1 p)__ Dimension reduction
+
+__How many__ principal components would you retain to explain about 3/4ths of the total variability?
+How much variability is actually retained?
+
+To answer this question, I would like you to embed R notation in the sentence
+  you write to print the variability proportion.
+For example:
+
+* Retaining 2 components explains
+  `r signif(sum(summary(pca_nmcensus)$sdev[1:2]^2) / sum(summary(pca_nmcensus)$sdev^2), 4)`
+  of the total variability.
+
+This is calculated by squaring the standard deviations of each component to get the variances,
+  adding the first two variances (the indices `[1:2]`),
+  then dividing by the sum of all the variances.
+That ratio give the proportion of variance for the first two components.
+
+### Solution
+
+[answer]
+
+
+
+
+## __(3 p)__ PC interpretations
+
+__Interpret the number of principal components you retained__ in the previous step.
+
+_Here's an interpretation of the first component._
+
+PC`r i_print <- 1; signif(i_print,1)` explains
+`r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
+of the total variation.
+
+As PC`r signif(i_print,1)` increases,
+  households heating with gas and electric _increase_,
+  __while__
+  poverty, rent greater than 35% of income, propotion with no phone or plumbing,
+  heating with wood, owner-occupied dwellings, and vacant homes _decrease_.
+
+I'm surprised to learn that heating with wood and poverty are related,
+  everything else makes sense.
+This seems to be the primary poverty component.
+
+_Interpret the rest below._
+
+### Solution
+
+[answer]
+
+PC`r i_print <- 2; signif(i_print,1)` explains
+`r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
+of the total variation.
+
+As PC`r signif(i_print,1)` increases,
+
+
+
+PC`r i_print <- 3; signif(i_print,1)` explains
+`r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
+of the total variation.
+
+As PC`r signif(i_print,1)` increases,
+
+
+
+etc.
+
+
+
+
+
+## __(3 p)__ Visualizing and interpretting PCs
+
+Here are two-dimensional plots of PC1 against PC2, PC1 against PC3, and PC2 against PC3.
+The points and labels are colored by poverty proportion.
+
+```{R, fig.height = 6, fig.width = 5}
+library(ggplot2)
+p1 <- ggplot(as.data.frame(pca_nmcensus$scores), aes(x = Comp.1, y = Comp.2, colour = dat_nmcensus$PovAll))
+p1 <- p1 + scale_colour_gradientn(colours=c("red", "blue"))
+p1 <- p1 + geom_text(aes(label = dat_nmcensus$County), vjust = -0.5, alpha = 0.25)
+p1 <- p1 + geom_point(size = 3)
+p1 <- p1 + theme(legend.position="bottom")
+p2 <- ggplot(as.data.frame(pca_nmcensus$scores), aes(x = Comp.1, y = Comp.3, colour = dat_nmcensus$PovAll))
+p2 <- p2 + scale_colour_gradientn(colours=c("red", "blue"))
+p2 <- p2 + geom_text(aes(label = dat_nmcensus$County), vjust = -0.5, alpha = 0.25)
+p2 <- p2 + geom_point(size = 3)
+p2 <- p2 + theme(legend.position="none")
+p3 <- ggplot(as.data.frame(pca_nmcensus$scores), aes(x = Comp.2, y = Comp.3, colour = dat_nmcensus$PovAll))
+p3 <- p3 + scale_colour_gradientn(colours=c("red", "blue"))
+p3 <- p3 + geom_text(aes(label = dat_nmcensus$County), vjust = -0.5, alpha = 0.25)
+p3 <- p3 + geom_point(size = 3)
+p3 <- p3 + theme(legend.position="none")
+
+print(p1)
+```
+```{R, fig.height = 6, fig.width = 10}
+library(gridExtra)
+grid.arrange(grobs = list(p2, p3), nrow=1, top = "Scatterplots of first three PCs")
+
+#### For a rotatable 3D plot, use plot3d() from the rgl library
+# ##   This uses the R version of the OpenGL (Open Graphics Library)
+# library(rgl)
+# plot3d(x = pca_nmcensus$scores[,"Comp.1"]
+#      , y = pca_nmcensus$scores[,"Comp.2"]
+#      , z = pca_nmcensus$scores[,"Comp.3"])
+```
+
+__Using your interpretations of PC1 and PC2 above__,
+  describe these three counties:
+  __Bernalillo, Mora, and Roosevelt__.
+
+_As an example, here's a description for Los Alamos._
+
+__Los Alamos__ has large PC1 and large PC2, this indicates
+  (both) there is very low poverty,
+  (PC1) dwellings heat with gas and electric, and
+  (PC2) there tends to be high dwelling vacancy.
+
+The characteristics roughly match that description:
+```{R}
+dat_nmcensus %>% filter(County == "Los Alamos") %>% print(n = Inf, width = Inf)
+```
+
+### Solution
+
+[answer]
+
+__Bernalillo__ has XXX PC1 and XXX PC2, this indicates
+  (both)
+  (PC1)
+  (PC2)
+
+The characteristics (do/do not) match that description:
+```{R}
+# check after you describe it using the PCs
+#dat_nmcensus %>% filter(County == "Bernalillo") %>% print(n = Inf, width = Inf)
+```
+
+__Mora__ has XXX PC1 and XXX PC2, this indicates
+  (both)
+  (PC1)
+  (PC2)
+
+The characteristics (do/do not) match that description:
+```{R}
+# check after you describe it using the PCs
+#dat_nmcensus %>% filter(County == "Mora") %>% print(n = Inf, width = Inf)
+```
+
+__Roosevelt__ has XXX PC1 and XXX PC2, this indicates
+  (both)
+  (PC1)
+  (PC2)
+
+The characteristics (do/do not) match that description:
+```{R}
+# check after you describe it using the PCs
+#dat_nmcensus %>% filter(County == "Roosevelt") %>% print(n = Inf, width = Inf)
+```
