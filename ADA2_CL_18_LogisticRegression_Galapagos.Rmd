@@ -1,8 +1,10 @@
 ---
 title: "ADA2: Class 18, Ch 11, Logistic Regression"
-author: "Name Here"
+author: "Tim Farkas"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
+  pdf_document:
+    df_print: kable
   html_document:
     toc: true
     number_sections: true
@@ -15,8 +17,6 @@ output:
       #smooth_scroll: TRUE
     theme: cosmo #spacelab #yeti #united #cosmo
     highlight: tango
-  pdf_document:
-    df_print: kable
 fontsize: 12pt
 geometry: margin=0.25in
 always_allow_html: yes
@@ -172,7 +172,7 @@ dat_gal <-
   mutate(
   ) %>%
   filter(
-    TRUE  # !(id %in% c( ... ))
+    !(id %in% c(11, 15, 7))
   )
 
 ### SOLUTION
@@ -224,32 +224,15 @@ Indicate whether any observations are gross outliers and should be dropped, and
 whether variables are obvious candidates for transformation.
 Then, drop outliers, transform and update your comments, and repeat until satisfied.
 
-
-
 ### Solution
 
-__Proportion plots: __
-
-
-
-
-
-
-
-
-
+__Proportion plots: __ The results here are largely similar to results with empirical logits. See below. 
 
 __Empirical logit plots:__
 
-[answer]
+First, we see some potential outliers in predictor values for Adjacent (id = 11), Area (15), and StCruz (7), we remove them. There are three islands with 100% endemism, which is is pretty outlier-ish, given the next highest endemism is 75%, but I'm reluctant to remove them given how few islands there are. Let's leave them in for now and see how we do. 
 
-
-
-
-
-
-
-
+I don't see any clear candidates for transformation, and the results show a clear negative relationship between both Area and Elevation, and also possibly Nearest, which doesn't make sense -- should be a positive relationship, based on island biogeography.
 
 ## __(0 p)__ Predictor scatterplot matrix
 
@@ -263,7 +246,6 @@ library(GGally)
 p <- ggpairs(dat_gal %>% select(Area, Elevation, Nearest, StCruz, Adjacent))
 print(p)
 ```
-
 
 ## __(1 p)__ Fit a logistic regression model, interpret deviance lack-of-fit
 
@@ -295,7 +277,7 @@ glm_g_aensj_red_AIC <-
     # use scope=formula() to consider adding two-way interactions
   #, scope = formula(cbind(PlantEnd, Plants - PlantEnd) ~ (Area + Nearest + StCruz + Adjacent)^2)
   , direction = "both"
-  , trace = 0
+  , trace = TRUE
   )
 
 # the anova object provides a summary of the selection steps in order
@@ -319,16 +301,9 @@ This is a realistic example and not everything may work out nicely.)__
 
 ### Solution
 
-[answer]
+Full: The deviance lack-of-fit test strongly rejects goodness of fit at (p < 0.0001). 
 
-Full:
-
-
-
-Reduced:
-
-
-
+Reduced: The reduce model, excluding only Nearest, also shows rejected goodness of fit (p < 0.0001). 
 
 ## __(2 p)__ Interpret logistic regression coefficients
 
@@ -341,19 +316,14 @@ summary(glm_g_aensj_red_AIC)
 
 ### Solution
 
-[answer]
+`Area` is significant and it's negative coefficient of
+  `r signif(glm_g_aensj_red_AIC$coefficients[2], 3)` suggests that as `Area`
+  increases by 1 km$^2$, the proportion of endemic plants decreases by `r signif(glm_g_aensj_red_AIC$coefficients[2], 3)` units on the log-odds scale.
 
+`StCruz` is not significant at $\alpha = 0.05$, indicating no relationship between the distance from St. Cruz Island and endemism 
 
-`XXX` is significant and it's negative coefficient of
-  `r signif(glm_g_aensj_red_AIC$coefficients[2], 3)` suggests that as `XXX`
-  increases, the proportion of endemic plants decreases.
-
-etc.
-
-
-
-
-
+`Adjacent` is significant and it's positive coefficient of
+  `r signif(glm_g_aensj_red_AIC$coefficients[4], 3)` suggests that as area of the nearest adjacent island increases by 1 km$^2$, the proportion of endemic plants increase by `r signif(glm_g_aensj_red_AIC$coefficients[4], 3)` units on the log-odds scale.
 
 ## __(1 p)__ Write model equation
 
@@ -362,14 +332,12 @@ the selected predictor variables on the probability scale.
 
 ### Solution
 
-[answer]
-
 The logistic equation is
 $$
 \tilde{p}
   =
-\frac{     \exp( XXX )}
-     { 1 + \exp( XXX ) }
+\frac{     \exp[-0.449 - (8.64 \times 10^-4)Area - (2.9 \times 10^-3)StCruz + (1.1 \times 10^-3)Adjacent]}
+     { 1 + \exp[-0.449 - (8.64 \times 10^-4)Area - (2.9 \times 10^-3)StCruz + (1.1 \times 10^-3)Adjacent ] }
 .
 $$
 
@@ -387,8 +355,7 @@ With multiple predictors, you should choose 1 to 5 levels of the second predicto
 If you have more than two predictors, maybe just choosing the mean of the other predictors
   is enough to tell the story of the relationship with the first predictor.
 
-```
-{R}
+```{R}
 # choose levels of the second predictor and use all values from the first
 # we only need to keep the variables that were retained in the model:
   # Area and Adjacent
@@ -417,6 +384,7 @@ dat_gal_pred_Adjacent <-
   , Group = "Area"
   )
 
+
 # bind both together
 dat_gal_pred_plot <-
   bind_rows(
@@ -424,6 +392,14 @@ dat_gal_pred_plot <-
   , dat_gal_pred_Adjacent
   )
 
+
+# get intendend model for the following to work,
+# since my stepwise regression included StCruz
+glm_g_aensj_red_AIC <-  glm(
+    cbind(PlantEnd, Plants - PlantEnd) ~ Area + Adjacent
+  , family = binomial
+  , data = dat_gal
+  )
 
 # put the fitted values in the data.frame
 # predict() uses all the values in dataset, including appended values
@@ -455,8 +431,7 @@ dat_gal_pred_plot <-
 
 Given to you.
 
-```
-{R, fig.height = 6, fig.width = 8}
+```{R, fig.height = 6, fig.width = 8}
 library(ggplot2)
 p1 <- ggplot(dat_gal_pred_plot %>% filter(x_var == "Area"), aes(x = Area, y = p_hat, colour = Adjacent, group = Adjacent))
 # predicted curve and point-wise 95% CI
@@ -556,8 +531,9 @@ dat_gal %>%
   )
 ```
 
-[answer]
+The confidence intervals indicate the expected proportion of plants that are endemic will be between the upper and lower estimates for 95% of experiments using data from this population. All of them are rather tight, and predict very similar values of around one-third of plants to be endemic. 
 
+The model does not validate on our holdout dataset. The true proportion of endemism for all three islands is outside the prediction intervals based on our model. This is not surprising given the strong rejection of goodness of fit by the deviance test. 
 
 ## __(2 p)__ Caveats
 
@@ -566,5 +542,7 @@ Do you have reason to expect that model predictions may not be accurate?
 
 ### Solution
 
-[answer]
+There are a few issues to consider. Heads up: I'm well versed in this topic. First, inclusion of Santa Cruz island is sort of strange for this analysis since it's being considered both an "island" and the "mainland". If we're to include SC Island, better use the nearest coast in South America as the mainland. Second, including only distance to the mainland and distance to nearest island isn't great, since that leaves out all the other islands, some of which might be big. A more sophisticated measure is "connectivity", which incorporates distance to all islands and their areas into a single measure. We also may have an issue with the shape of relationship with these predictors. Looks to me like there are non-linearities with both Area and Adjacent that we could work to capture. For another day, I guess. 
+
+No, we really don't expect these islands to validate because the deviance lack-of-fit test so strongly rejected goodness of fit.
 
