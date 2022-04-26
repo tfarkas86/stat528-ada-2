@@ -1,8 +1,10 @@
 ---
 title: "ADA2: Class 25, Ch 15, Multivariate Analysis of Variance (MANOVA)"
-author: "Name Here"
+author: "Tim Farkas"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
+  pdf_document:
+    df_print: kable
   html_document:
     toc: true
     number_sections: true
@@ -15,8 +17,6 @@ output:
       #smooth_scroll: TRUE
     theme: cosmo #spacelab #yeti #united #cosmo
     highlight: tango
-  pdf_document:
-    df_print: kable
 fontsize: 12pt
 geometry: margin=0.25in
 always_allow_html: yes
@@ -135,7 +135,12 @@ names(dat_sjrs)
 
 
 ### SOLUTION
-# if necessary, some data modifications here informed from your analysis
+
+dat_sjrs <- 
+  dat_sjrs %>%
+#  select(Source, Ba137, Ca43, Mg24, Sr86) %>%
+  filter(Ca43 > 0.5) %>%
+  mutate(across(starts_with("Ba"), ~ log(.x)))
 
 ```
 
@@ -143,9 +148,7 @@ Add code above.
 
 ### Solution
 
-[answer]
-
-
+I removed some outliers with extremely low values of Ca43, and also log-transformed Ba137 and Ba138, which now show clearer separation among the sources. Following the prior exercise, I also pulled out one isotope per element since isotopes are so highly correlated. 
 
 ## __(1 p)__ Known fish scatterplot
 
@@ -176,8 +179,11 @@ __Source populations__ may or may not be different, describe the source differen
 
 ### Solution
 
-[answer]
+As explained above, isotopes of the same element are highly correlated, so one one per element has been retained. 
 
+We see clear separation among the sources for Ba137, where two sources overlap (NAP and SJR), and each of the other two are distinct, as well as for Sr86, where DEX is clearly distinguished from the other three. 
+
+We also see a positive relationship between Ba137 and Mg24, and a negative relationship between Ba137 and Sr86. In both cases, there appear to be no discernable relationships between the variables within sources. If anything, there is a little Simpson's paradox with the Ba/Sr relationship, wherein the overall pattern is a negative relationship, but within DEX there may be a positive relationship. 
 
 
 ## __(2 p)__ MANOVA Assumptions
@@ -211,10 +217,7 @@ __Summarize__ the normality results after trying to address any deviations.
 
 ### Solution
 
-[answer]
-
-
-
+I log-transformed the Ba isotopes, which led to much more normal distributions. Nevertheless, the Shapiro-Wilk tests reject normality for all Sources, and QQ plots show especially strong deviations from multivariate normality for DEX and SJR. I will continue for now, and maybe come back to better meet normality assumptions. 
 
 ## __(3 p)__ MANOVA
 
@@ -235,10 +238,14 @@ man_dat_sjrs
 
 ### Solution
 
-[answer]
+The null hypothesis is that the vector of feature means is equal among the four Sources. 
+$$
+H_0: \mathbf{\mu_{DEX}} = \mathbf{\mu_{GJH}} = \mathbf{\mu_{NAP}}= \mathbf{\mu_{SJR}}
+$$
 
+The alternative $H_\alpha$ is the negation of this statement, not all vector means are equal. 
 
-
+The Pillai test statistic, the most robust to violated assumptions, shows a significant difference in isotope composition among Sources (p < 0.0001), indicating not all the mean vectors are equal. 
 
 ## __(2 p)__ Multiple comparisons
 
@@ -280,10 +287,7 @@ __Indicate__ which pairs differ at this $\alpha$ level.
 
 ### Solution
 
-[answer]
-
-
-
+The Bonferroni-corrected threshold is $\alpha = \frac{0.05}{5} = 0.01$, leading to highly significant differences among all pairs of Sources (p < 0.0001), except between NAP and SJR (p = 0.14).  
 
 ## __(1 p)__ Canonical Discriminant functions (visualize differences)
 
@@ -316,5 +320,4 @@ __Which__ discriminant variables are useful for detecting which differences?
 
 ### Solution
 
-[answer]
-
+Both CDV1 and CDV2 show separation among the Sources. CAN1 shows differences between all pairwise comparisons of Sources except for NAP and SJR, like the findings based on Bonferroni comparison. CAN2 also shows some differences between GJH and each of the other Sources. CAN3 shows completely overlapping values for all 4 Sources. 
