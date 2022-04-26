@@ -1,8 +1,10 @@
 ---
 title: "ADA2: Class 21, Ch 13, Principal Components Analysis (PCA)"
-author: "Name Here"
+author: "Tim Farkas"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
 output:
+  pdf_document:
+    df_print: kable
   html_document:
     toc: true
     number_sections: true
@@ -15,8 +17,6 @@ output:
       #smooth_scroll: TRUE
     theme: cosmo #spacelab #yeti #united #cosmo
     highlight: tango
-  pdf_document:
-    df_print: kable
 fontsize: 12pt
 geometry: margin=0.25in
 always_allow_html: yes
@@ -139,8 +139,9 @@ Place your code to subset, filter, or transform variables in this code chunk bel
 dat_nmcensus <-
   dat_nmcensus %>%
   filter(
-    TRUE
-  )
+    !Area %in% c(31)
+  ) %>%
+  mutate(across(Rent35, ~ ifelse(County == "De Baca", mean(.x), .x)))
 
 ```
 
@@ -161,9 +162,9 @@ In the scatterplot matrix __describe qualitatively what you see__.
 
 ### Solution
 
-[answer]
+Firstly, there is a rather substantial outlier, McKinley County, with extremely proportions of homes without phone or plumbing. This county appears to be driving relationships with poverty, so I'm going to remove it. Also, De Baca county shows 0 percent of homes with rent over 35% of income, a major outlier for that feature. I imputed with the mean.
 
-
+We see in the scatterplots a variety of correlations, including a relationship between use of wood heat and vacant homes, heat type and owner occupancy, presence of a phone and plumbing and heat type, heat type and rental cost, and poverty and presence of a phone. Overall, only presence of a phone shows a significant correlation with poverty in bivariate analysis. 
 
 ## __(1 p)__ Remove the one most extreme county
 
@@ -173,9 +174,7 @@ Remove that one observation at the end of the data section above,
 
 ### Solution
 
-[answer]
-
-
+Already done!
 
 ## __(0 p)__ PCA using correlation matrix
 
@@ -217,7 +216,9 @@ That ratio give the proportion of variance for the first two components.
 
 ### Solution
 
-[answer]
+Retaining 4 components explains
+  `r signif(sum(summary(pca_nmcensus)$sdev[1:4]^2) / sum(summary(pca_nmcensus)$sdev^2), 4)`
+  of the total variability.
 
 
 
@@ -242,33 +243,43 @@ I'm surprised to learn that heating with wood and poverty are related,
   everything else makes sense.
 This seems to be the primary poverty component.
 
+
+
 _Interpret the rest below._
 
 ### Solution
 
-[answer]
+PC`r i_print <- 1; signif(i_print,1)` explains
+`r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
+of the total variation.
+
+As PC`r signif(i_print,1)` increases,
+  household vacancy, owner occupancy, heating with wood, lack of plumbing and phone, rent above  35%, and poverty all _increase_,
+  __while__ heating with alternate fuels decreases.
+  
+PC 1 appears to capture a rural to urban, rich to poor spectrum. 
 
 PC`r i_print <- 2; signif(i_print,1)` explains
 `r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
 of the total variation.
 
-As PC`r signif(i_print,1)` increases,
-
-
+As PC`r signif(i_print,1)` increases, household vacancy, rental vacancy, owner occupancy, and heating with gas all increase, whereas electric heating lack of phone, and poverty all decrease.  
 
 PC`r i_print <- 3; signif(i_print,1)` explains
 `r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
 of the total variation.
 
-As PC`r signif(i_print,1)` increases,
+As PC`r signif(i_print,1)` increases, household and rental vacancy plus electric heating increase, whereas gas heating, lack of plumbing, and rent over 35% of income all decrease. 
 
+PCs 2 and 3 seem to represent places with declining populations, perhaps? Given all the vacancies. But that doesn't seem necessarily to correlated with poverty. 
 
+PC`r i_print <- 4; signif(i_print,1)` explains
+`r signif(100*pca_nmcensus$sdev[i_print]^2/sum(pca_nmcensus$sdev^2), 3)`%
+of the total variation.
 
-etc.
+As PC`r signif(i_print,1)` increases, rent of 35% of income increases, whereas rental vacancy, gas heat, lack of plumbing and phone, and poverty all decrease. 
 
-
-
-
+This might represent areas with well-to-do rental communities. 
 
 ## __(3 p)__ Visualizing and interpretting PCs
 
@@ -327,10 +338,10 @@ dat_nmcensus %>% filter(County == "Los Alamos") %>% print(n = Inf, width = Inf)
 
 [answer]
 
-__Bernalillo__ has XXX PC1 and XXX PC2, this indicates
-  (both)
-  (PC1)
-  (PC2)
+__Bernalillo__ has low PC1 and average PC2, this indicates
+  (both) low ownership, low vacancy, higih phone usage, low poverty
+  (PC1) heating with fuel other than wood, low rental costs, high income to rent ratio
+  (PC2) split fuel between gas and electric.  
 
 The characteristics (do/do not) match that description:
 ```{R}
@@ -338,10 +349,10 @@ The characteristics (do/do not) match that description:
 #dat_nmcensus %>% filter(County == "Bernalillo") %>% print(n = Inf, width = Inf)
 ```
 
-__Mora__ has XXX PC1 and XXX PC2, this indicates
-  (both)
-  (PC1)
-  (PC2)
+__Mora__ has high PC1 and low PC2, this indicates
+  (both) not a lot of gas heat, few houses with phones, high poverty
+  (PC1) much wood heat, many houses without plumbing, many households with more than 35% of income going to rent, 
+  (PC2) many vacant rentals, 
 
 The characteristics (do/do not) match that description:
 ```{R}
@@ -349,10 +360,10 @@ The characteristics (do/do not) match that description:
 #dat_nmcensus %>% filter(County == "Mora") %>% print(n = Inf, width = Inf)
 ```
 
-__Roosevelt__ has XXX PC1 and XXX PC2, this indicates
-  (both)
-  (PC1)
-  (PC2)
+__Roosevelt__ has low PC1 and low PC2, this indicates
+  (both) few vacant owned homes, low home ownership, a lot of electric heat, 
+  (PC1) little wood heat, much plumbing, few households with greater than 35% of income to rent
+  (PC2) few vacant rentals, 
 
 The characteristics (do/do not) match that description:
 ```{R}

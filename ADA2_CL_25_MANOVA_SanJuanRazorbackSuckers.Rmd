@@ -1,0 +1,320 @@
+---
+title: "ADA2: Class 25, Ch 15, Multivariate Analysis of Variance (MANOVA)"
+author: "Name Here"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+  pdf_document:
+    df_print: kable
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+```
+
+# San Juan River Razorback Suckers
+
+Peer mentor (Spring 2016) _Adam Barkalow_'s wife uses stable isotope ratios to analyze fish.
+
+<!---
+Original image sources
+https://upload.wikimedia.org/wikipedia/commons/4/45/Sanjuanrivermap.jpg
+http://chrisbrownphotography.com/wp-content/gallery/utah/san-juan-river/San-Juan-River-Utah.jpg
+http://www.biologicaldiversity.org/species/fish/razorback_sucker/images/RazorbackSucker_MarkFuller_USFWS.jpg
+http://frenchhillpond.org/Images/Fauna/Fish/Parts%20of%20a%20Boney%20Fish.jpg
+--->
+
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_SanJuanRiverBasin.jpg" width="300">
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_SanJuanRiverPhoto.jpg" width="300">
+
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_RazorbackSucker.jpg" width="300">
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_SpineyRays.jpg" width="300">
+
+__Razorback Suckers__ were collected in 2014 on the San Juan River.
+Elemental [isotopic ratios](https://en.wikipedia.org/wiki/Isotope_analysis)
+from finrays were analyzed for Ba (Barium 56), Ca (Calcium 20), Mg (Magnesium 12), and Sr (Strontium 38).
+Finrays are non-lethally obtained and are used to detect natal origin since the
+material in the reys are partially developed early in life.
+
+__The issue__ is that hatchery fish can get into the river and lose their tags.
+It is important for environmental resource managers to know whether untagged fish are wild or hatchery fish.
+There are five fish sources in the dataset.
+
+```
+5 Sources
+
+Hatchery
+  DEX = Dexter National Fish Hatchery
+  GJH = Ouray  National Fish Hatchery, Grand Valley Unit
+
+Wild
+  NAP = NAPI ponds
+  SJR = San Juan River
+
+Unknown
+  UNK = untagged Razorback Suckers captured in the San Juan River
+        these could be from any of the above sources
+```
+
+__Our goal__ is to test whether the known source populations
+  have different multivariate means, and if so, which pairs of populations differ.
+
+## __(1 p)__ Clean and transform data
+
+Looking at the scatterplot matrix below, clean and/or transform the data if you think it will be helpful.
+Note that measurement error can be an issue in complicated biological measurements.
+Furthermore, a transformation might help separate observations that are tightly grouped in space.
+
+__Please download__ the data into your working directory to save downloads from
+my website each time you knit this document.
+
+```{R}
+library(erikmisc)
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+dat_sjrs_full <-
+  read_csv(
+    "ADA2_CL_23_Clustering_SanJuanRazorbackSuckers_data2014.csv"
+  )
+
+dim(dat_sjrs_full)
+# the last set of observations only have a few isotopes, so exclude
+dat_sjrs <-
+  dat_sjrs_full %>%
+  na.omit()
+
+dim(dat_sjrs)
+# no missing values
+dat_sjrs %>%
+  is.na() %>%
+  sum()
+#str(dat_sjrs)
+
+dat_sjrs <-
+  dat_sjrs %>%
+  select(
+    Source
+  , Ba137:Sr88
+  ) %>%
+  filter(
+    # Exclude unknown sources
+    Source != "UNK"
+  )
+names(dat_sjrs)
+
+
+
+### SOLUTION
+# if necessary, some data modifications here informed from your analysis
+
+```
+
+Add code above.
+
+### Solution
+
+[answer]
+
+
+
+## __(1 p)__ Known fish scatterplot
+
+Note that this plot can take a while to generate.
+You're welcome to subset the data further for this plot if some of the variables are redundant.
+You could probably get away with 5 columns of data without any loss of interpretation.
+If you want to do this, replace the `dat_sjrs` in the `ggpairs()` function with
+  `subset(dat_sjrs, select = c(col1, col2, ...))` and specify the columns to plot.
+However, do the analysis using all the columns of data.
+
+```{R, fig.height = 8, fig.width = 8, cache = TRUE}
+# Scatterplot matrix
+library(ggplot2)
+library(GGally)
+p <- ggpairs(dat_sjrs
+            , mapping = ggplot2::aes(colour = Source, alpha = 0.5)
+            , upper = list(continuous = "density", combo = "box")
+            , lower = list(continuous = "points", combo = "dot")
+            #, lower = list(continuous = "cor")
+            , title = "Original data by source"
+            )
+print(p)
+```
+
+__Describe__ the relationships between isotopes of the same element (same atomic number) and between different elements.
+
+__Source populations__ may or may not be different, describe the source differences you see.
+
+### Solution
+
+[answer]
+
+
+
+## __(2 p)__ MANOVA Assumptions
+
+Below are Shapiro-Wilk test for multivariate normality,
+  as well as QQ-plots comparing the Mahalanobis D2 distance to a chi-squared distribution.
+Keep in mind that we have large sample sizes,
+  so the numeric tests may be too sensitive.
+We do expect some deviations for the extreme D2 values, but they should not be too systematic.
+If there are gross violations of normality,
+  try a transformation(s) in a subset of the original variables that improve this.
+
+```{R, fig.height = 8, fig.width = 8}
+# Test multivariate normality using the Shapiro-Wilk test for multivariate normality
+library(mvnormtest)
+# The data needs to be transposed t() so each variable is a row
+#   with observations as columns.
+mshapiro.test(dat_sjrs %>% filter(Source == "DEX") %>% select(Ba137:Sr88) %>% t())
+mshapiro.test(dat_sjrs %>% filter(Source == "GJH") %>% select(Ba137:Sr88) %>% t())
+mshapiro.test(dat_sjrs %>% filter(Source == "NAP") %>% select(Ba137:Sr88) %>% t())
+mshapiro.test(dat_sjrs %>% filter(Source == "SJR") %>% select(Ba137:Sr88) %>% t())
+
+par(mfrow=c(2,2))
+e_plot_mnv_norm_qqplot(dat_sjrs %>% filter(Source == "DEX") %>% select(Ba137:Sr88), name = "DEX")
+e_plot_mnv_norm_qqplot(dat_sjrs %>% filter(Source == "GJH") %>% select(Ba137:Sr88), name = "GJH")
+e_plot_mnv_norm_qqplot(dat_sjrs %>% filter(Source == "NAP") %>% select(Ba137:Sr88), name = "NAP")
+e_plot_mnv_norm_qqplot(dat_sjrs %>% filter(Source == "SJR") %>% select(Ba137:Sr88), name = "SJR")
+```
+
+__Summarize__ the normality results after trying to address any deviations.
+
+### Solution
+
+[answer]
+
+
+
+
+## __(3 p)__ MANOVA
+
+Below is the result of the MANOVA test.
+
+__State__ the null and alternative hypotheses in words and notation.
+
+__Select__ the robust test statistic and
+  __interpret__ the result in the context of the dataset.
+
+```{R}
+# Multivariate MANOVA test
+library(car)
+lm_man <- lm(cbind(Ba137, Ba138, Ca43, Mg24, Mg25, Mg26, Sr86, Sr87, Sr88) ~ Source, data = dat_sjrs)
+man_dat_sjrs <- Manova(lm_man)
+man_dat_sjrs
+```
+
+### Solution
+
+[answer]
+
+
+
+
+## __(2 p)__ Multiple comparisons
+
+Below I wrote nested loops to compare all pairs of Sources.
+
+The output gives a title for which comparisons are being made with the test result.
+
+```{R}
+# Multivariate MANOVA test
+
+# NOTE: I specify pairs of sources by identifying the sorted unique list of Sources
+Source_list <- dat_sjrs %>% pull(Source) %>% unique() %>% sort()
+Source_list
+# then I pull out pairs by index, like this
+Source_list[c(1,2)]
+# I think this is much easier than typing all names for the pairs of Sources
+
+# for each pair of Sources
+for (i_1 in 1:(length(Source_list) - 1)) {
+  for (i_2 in (i_1 + 1):length(Source_list)) {
+    # print a header to indicate which comparisons are being made
+    cat("\n\n")
+    cat(paste("***** Comparison between", i_1, Source_list[i_1], "and", i_2, Source_list[i_2]))
+
+    # perform pairwise comparison
+    library(car)
+    man_pair <- Manova(lm(cbind(Ba137, Ba138, Ca43, Mg24, Mg25, Mg26, Sr86, Sr87, Sr88) ~ Source
+               , data = dat_sjrs %>% filter(Source %in% Source_list[c(i_1, i_2)])
+           ))
+    # print result
+    print(man_pair)
+  }
+}
+```
+
+__Specify__ the Bonferroni-corrected $\alpha$ level for pairwise tests.
+
+__Indicate__ which pairs differ at this $\alpha$ level.
+
+### Solution
+
+[answer]
+
+
+
+
+## __(1 p)__ Canonical Discriminant functions (visualize differences)
+
+The canonical discriminant analysis will indicate the directions that provide the
+  greatest ability to distinguish between the groups.
+
+```{R, fig.height = 6, fig.width = 6}
+# perform canonical discriminant analysis
+library(candisc)
+can_dat_sjrs <- candisc(lm_man)
+
+## Scatterplot matrix
+library(ggplot2)
+#suppressMessages(suppressWarnings(library(GGally)))
+library(GGally)
+p <- ggpairs(can_dat_sjrs$scores
+            , mapping = ggplot2::aes(colour = Source, alpha = 0.5)
+            , upper = list(continuous = "density", combo = "box")
+            , lower = list(continuous = "points", combo = "dot")
+            #, lower = list(continuous = "cor")
+            , title = "Canonical discriminant variables by source"
+            )
+print(p)
+```
+
+__How__ do the MANOVA differences found above reveal themselves in the projections provided
+  by the discriminant variables?
+
+__Which__ discriminant variables are useful for detecting which differences?
+
+### Solution
+
+[answer]
+

@@ -1,0 +1,370 @@
+---
+title: "ADA2: Class 23, Ch 14, Clustering"
+author: "Tim Farkas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  pdf_document:
+    df_print: kable
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    #df_print: paged
+    #df_print: kable
+    #toc_float: true
+      #collapsed: false
+      #smooth_scroll: TRUE
+    theme: cosmo #spacelab #yeti #united #cosmo
+    highlight: tango
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+
+```{R, echo=FALSE}
+# I set some GLOBAL R chunk options here.
+#   (to hide this message add "echo=FALSE" to the code chunk options)
+
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+
+#knitr::opts_chunk$set(cache = TRUE, autodep=TRUE)
+```
+
+# San Juan River Razorback Suckers
+
+Peer mentor (Spring 2016) _Adam Barkalow_'s wife uses stable isotope ratios to analyze fish.
+
+<!---
+Original image sources
+https://upload.wikimedia.org/wikipedia/commons/4/45/Sanjuanrivermap.jpg
+http://chrisbrownphotography.com/wp-content/gallery/utah/san-juan-river/San-Juan-River-Utah.jpg
+http://www.biologicaldiversity.org/species/fish/razorback_sucker/images/RazorbackSucker_MarkFuller_USFWS.jpg
+http://frenchhillpond.org/Images/Fauna/Fish/Parts%20of%20a%20Boney%20Fish.jpg
+--->
+
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_SanJuanRiverBasin.jpg" width="300">
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_SanJuanRiverPhoto.jpg" width="300">
+
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_RazorbackSucker.jpg" width="300">
+<img src="http://statacumen.com/teach/ADA2/worksheet/ADA2_CL_23_Clustering_Image_SpineyRays.jpg" width="300">
+
+__Razorback Suckers__ were collected in 2014 on the San Juan River.
+Elemental [isotopic ratios](https://en.wikipedia.org/wiki/Isotope_analysis)
+from finrays were analyzed for Ba (Barium 56), Ca (Calcium 20), Mg (Magnesium 12), and Sr (Strontium 38).
+Finrays are non-lethally obtained and are used to detect natal origin since the
+material in the reys are partially developed early in life.
+
+__The issue__ is that hatchery fish can get into the river and lose their tags.
+It is important for environmental resource managers to know whether untagged fish are wild or hatchery fish.
+There are five fish sources in the dataset.
+
+```
+5 Sources
+
+Hatchery
+  DEX = Dexter National Fish Hatchery
+  GJH = Ouray  National Fish Hatchery, Grand Valley Unit
+
+Wild
+  NAP = NAPI ponds
+  SJR = San Juan River
+
+Unknown
+  UNK = untagged Razorback Suckers captured in the San Juan River
+        these could be from any of the above sources
+```
+
+__Our goal__ is to use the observations with various clustering methods and
+  indexes to determine the number of clusters to try to find meaningful groups.
+We are using the fish from the four known sources so we can check at the end whether
+  our clusters generated meaningful clusters in terms of hatchery and wild fish.
+_No cheating ... try to do the clustering first, and once satisfied, then reveal the answers.
+This will help emphasize how challenging clustering can be._
+
+
+## __(2 p)__ Clean and transform data
+
+Looking at the scatterplot matrix below, clean and/or transform the data if you think it will be helpful.
+Note that measurement error can be an issue in complicated biological measurements.
+Furthermore, a transformation might help separate observations that are tightly grouped in space.
+
+__Please download__ the data into your working directory to save downloads from
+my website each time you knit this document.
+
+```{R}
+library(tidyverse)
+
+# First, download the data to your computer,
+#   save in the same folder as this Rmd file.
+
+# read the data
+dat_sjrs_full <-
+  read_csv(
+    "ADA2_CL_23_Clustering_SanJuanRazorbackSuckers_data2014.csv"
+  )
+
+dim(dat_sjrs_full)
+# the last set of observations only have a few isotopes, so exclude
+dat_sjrs <-
+  dat_sjrs_full %>%
+  na.omit()
+
+dim(dat_sjrs)
+# no missing values
+dat_sjrs %>%
+  is.na() %>%
+  sum()
+str(dat_sjrs)
+
+dat_sjrs <-
+  dat_sjrs %>%
+  select(
+    Source, Ba137:Sr88
+  ) %>%
+  filter(
+    # Exclude unknown sources
+    Source != "UNK"
+  )
+names(dat_sjrs)
+
+
+## There are a few unual observations, remove those assuming measurement errors
+library(GGally)
+
+dat_sjrs <- 
+  dat_sjrs %>%
+  filter(Ca43 > 0.5) %>%
+  mutate(across(starts_with("Ba"), ~ log(.x)))
+
+ggpairs(dat_sjrs)
+
+### SOLUTION
+```
+
+Add code above.
+
+### Solution
+
+I removed some outliers with extremely low values of Ca43, and also log-transformed Ba137 and Ba138, which now show clearer separation among the sources. 
+
+
+## __(2 p)__ Known fish scatterplot
+
+Note that this plot can take a while to generate.
+You're welcome to subset the data further for this plot if some of the variables are redundant.
+You could probably get away with 5 columns of data without any loss of interpretation.
+If you want to do this, replace the `dat_sjrs` in the `ggpairs()` function with
+  `dat_sjrs %>% select(col1, col2, ...)` and specify the columns to plot.
+
+```{R, fig.height = 8, fig.width = 8, cache = TRUE}
+# Scatterplot matrix
+library(ggplot2)
+library(GGally)
+p <-
+  ggpairs(
+    dat_sjrs %>% select(Source, Ba137, Ca43, Mg24, Sr86)
+  , mapping = ggplot2::aes(colour = Source, alpha = 0.5)
+  , upper = list(continuous = "density", combo = "box")
+  , lower = list(continuous = "points", combo = "dot")
+  #, lower = list(continuous = "cor")
+  , title = "Original data by source"
+  )
+print(p)
+```
+
+__Describe__ the relationships between isotopes of the same element (same atomic number) and between different elements.
+
+__Source populations__ may or may not be different, describe the source differences you see.
+
+### Solution
+
+We see clear separation among the sources for Ba137, where two sources overlap (NAP and SJR), and each of the other two are distinct, as well as for Sr86, where DEX is clearly distinguished from the other three. 
+
+We also see a positive relationship between Ba137 and Mg24, and a negative relationship between Ba137 and Sr86. In both cases, there appear to be no discernable relationships between the variables within sources. If anything, there is a little Simpson's paradox with the Ba/Sr relationship, wherein the overall pattern is a negative relationship, but within DEX there may be a positive relationship. 
+
+## __(3 p)__ Clustering
+
+_You will probably spend most of your time in this part of the problem._
+
+Below I've set up code so you can select a cluster method (`clus_method_num`)
+  and an index for determining the number of clusters (`clus_index_num`).
+Both of these numbers will select from the respective list of methods and indices.
+
+__Your goal__ is to find a clustering method that creates a dendogram that seems to have
+  a relatively small number of clusters (2-8) that are different between clusters
+  (long branches at a high level of the tree)
+  but similar within clusters
+  (short branches at a low level of the tree).
+Try a few indices to see whether any help you cut the tree at a number of clusters
+  that you agree with upon visual inspection.
+Note that the `i.clus <- number` line at the bottom is for you to manually enter
+  a number of clusters you prefer, if you differ with the index's recommendation.
+
+_(Look below the plots for the question to answer.)_
+
+```{R}
+# Change integer data type to numeric
+dat_sjrs_num <-
+  dat_sjrs %>%
+  select(
+    -Source
+  ) %>%
+  as.matrix()
+
+# these two numeric switches select the cluster method and index for number of clusters
+clus_method_num <- 1   ## change this number to make selection
+
+clus_method <- c("ward.D", "ward.D2", "single", "complete", "average"
+               , "mcquitty", "median", "centroid")[clus_method_num]
+
+clus_index_num <- 4  ## change this number to make selection
+                       ## (multiple are possible but some take a very long time to run)
+clus_index <- c("kl"       , "ch"        , "hartigan"   , "ccc"        , "scott"
+               , "marriot" , "trcovw"    , "tracew"     , "friedman"   , "rubin"
+               , "cindex"  , "db"        , "silhouette" , "duda"       , "pseudot2"
+               , "beale"   , "ratkowsky" , "ball"       , "ptbiserial" , "gap"
+               , "frey"    , "mcclain"   , "gamma"      , "gplus"      , "tau"
+               , "dunn"    , "hubert"    , "sdindex"    , "dindex"     , "sdbw")[clus_index_num]
+
+# estimate the number of clusters
+library(NbClust)
+NC_out <- NbClust(dat_sjrs_num, method = clus_method, index = clus_index)
+# best number of clusters
+NC_out$Best.nc
+
+# number of clusters to identify with red boxes and ellipses
+i_clus <- NC_out$Best.nc[1] #3
+# manual number of clusters
+#i_clus <- 1
+
+# Number of clusters chosen
+i_clus
+
+
+```
+
+Visualization of clustering hierarchy and resulting cluster membership.
+
+```{R, fig.height = 5, fig.width = 8}
+#par(mfrow=c(1,2))
+# create distance matrix between points
+dat_sjrs_dist <-
+  dist(
+    dat_sjrs[,-1] # only use numeric columns, not labels
+  )
+
+# create dendrogram
+dat_sjrs_hc_complete  <-
+  hclust(
+    dat_sjrs_dist
+  , method = clus_method
+  )
+# create a column with group membership
+dat_sjrs <-
+  dat_sjrs %>%
+  mutate(
+    cut_comp = factor(cutree(dat_sjrs_hc_complete, k = i_clus))
+  )
+
+plot(
+    dat_sjrs_hc_complete
+  , hang = -1
+  , main = paste(clus_method, "using ", i_clus, "clusters")
+  , labels = dat_sjrs$Source
+  )
+rect.hclust(
+    dat_sjrs_hc_complete
+  , k = i_clus
+  )
+
+# create PCA scores plot with ellipses
+library(cluster)
+clusplot(
+    dat_sjrs[,-1]
+  , cutree(dat_sjrs_hc_complete, k = i_clus)
+  , color   = TRUE
+  , labels  = 2
+  , lines   = 0
+  , cex     = 2
+  , cex.txt = 0.25
+  , col.txt = "gray20"
+  , col.p = dat_sjrs$cut_comp
+  , main = paste(clus_method, "using ", i_clus, "clusters"), sub = NULL
+  )
+```
+
+__Discuss__ which method you are choosing and why.
+Did an index help you decide the number of clusters better than your human visual inspection did?
+
+### Solution
+
+I more or less randomly looked at a number of combinations method and index, and prefer the Ward approaches, which tend to give 3 clusters that separate early, relative to the very short branch lengths for further clusterings. I used the "ccc" index, but these did not appear to differ appreciably from one another. 
+
+
+## __(2 p)__ Cluster quality compared to known sources
+
+__STOP!__  _Only start this part after you're satisfied with your clustering above._
+
+In the scatterplots below,
+  two isotopes were selected that show differences in the scatterplot matrix above
+  _(choose others if you prefer)_.
+The top plot shows how each source population were clustered.
+The bottom plot shows cluster composition of source populations.
+
+I have set `eval=FALSE` so that the result is not revealed until you've completed
+  the clustering exercise above.
+When you're _totally_ satisfied with your clusters, return here and remove the `eval=FALSE`
+  option in the code chunk and see how you did!
+
+```{R, fig.height = 8, fig.width = 8, eval=TRUE}
+# eval=FALSE so this chunk doesn't evaluate until clustering complete above
+
+# plot data by Source with clusters indicated
+library(ggplot2)
+p1 <- ggplot(dat_sjrs, aes(x = Ba137, y = Sr86, colour = cut_comp))
+p1 <- p1 + geom_point(size = 2)
+p1 <- p1 + labs(title = "By source with clusters indicated")
+p1 <- p1 + facet_wrap( ~ Source, nrow = 1)
+#print(p1)
+
+# plot data by cluster with Source indicated
+library(ggplot2)
+p2 <- ggplot(dat_sjrs, aes(x = Ba137, y = Sr86, colour = Source))
+p2 <- p2 + geom_point(size = 2)
+p2 <- p2 + labs(title = "By cluster with source indicated")
+p2 <- p2 + facet_wrap( ~ cut_comp, nrow = 1)
+#print(p2)
+
+library(gridExtra)
+grid.arrange(grobs = list(p1, p2), ncol=1, top = paste("Clustering method \"", clus_method, "\" using ", i_clus, " clusters determined by \"", clus_index, "\"", sep=""))
+```
+
+__Describe__ how the clustering performed.
+How reliable does clustering seem to you?
+
+### Solution
+
+I'm pretty happy with this. It looks as though source is the major contributor to these three clusters. Cluster one is least pure, comprised mostly of source GJH, except for one observation from NAP and a handful from DEX. Cluster 2 is comprised entirely of DEX. And cluster 3 contains all of SJR and all but one observation from NAP. 
+
+## __(1 p)__ Cluster differences using different methods
+
+Given your experience trying different methods to develop the clusters
+  (think about your evaluation of the dendograms)
+  and the different results of indexes to determine the number of clusters,
+  make a few comments about how robust clustering is.
+That is, if clustering results are very sensitive to the options you select, then it's not very robust.
+
+### Solution
+
+As indicated above, I found the methods to differ a lot, with some leading to 3 clusters, and others leading to more like 8 or 9. I did not find the effect of changing the index to be very large.
+
